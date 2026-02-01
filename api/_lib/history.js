@@ -26,11 +26,15 @@ const fetchFundHistory = async (code, startDate, endDate) => {
 
 const fetchFundHistoryBatch = async (codes, startDate, endDate) => {
   if (!supabase || !Array.isArray(codes) || codes.length === 0) return {};
+  const normalizedCodes = codes
+    .map(normalizeCode)
+    .filter((code, index, array) => code && array.indexOf(code) === index);
+  if (normalizedCodes.length === 0) return {};
 
   const { data, error } = await supabase
     .from('historical_data')
     .select('fund_code, date, price')
-    .in('fund_code', codes)
+    .in('fund_code', normalizedCodes)
     .gte('date', startDate)
     .lte('date', endDate)
     .order('fund_code', { ascending: true })
@@ -83,4 +87,5 @@ module.exports = {
   fetchFundHistory,
   fetchFundHistoryBatch,
   fetchLatestPrice,
+  normalizeCode,
 };
