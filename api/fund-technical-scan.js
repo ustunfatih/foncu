@@ -55,14 +55,38 @@ module.exports = async function handler(req, res) {
     const historyByCode = await fetchFundHistoryBatch(codes, start, end);
 
     const results = [];
+    const debug = {
+      fundsTotal: (funds || []).length,
+      historyFound: 0,
+      historyMissing: 0,
+      skippedShortHistory: 0,
+      skippedNoSignal: 0,
+      rsiHits: 0,
+      crossHits: 0,
+    };
     for (const fund of funds || []) {
       const history = historyByCode[normalizeCode(fund.code)] || [];
-      if (history.length < longPeriod + 2) continue;
+      if (history.length === 0) {
+        debug.historyMissing += 1;
+        continue;
+      }
+      debug.historyFound += 1;
+      if (history.length < longPeriod + 2) {
+        debug.skippedShortHistory += 1;
+        continue;
+      }
 
       const rsi = calculateRsi(history, 14);
       const shortSma = calculateSma(history, shortPeriod);
       const longSma = calculateSma(history, longPeriod);
       const hasCross = detectSmaCross(shortSma, longSma);
+
+      if (rsi !== null && rsi <= rsiBelow) {
+        debug.rsiHits += 1;
+      }
+      if (hasCross) {
+        debug.crossHits += 1;
+      }
 
       if ((rsi !== null && rsi <= rsiBelow) || hasCross) {
         results.push({
@@ -74,6 +98,8 @@ module.exports = async function handler(req, res) {
           longSma: longSma[longSma.length - 1]?.value || null,
           smaCross: hasCross,
         });
+      } else {
+        debug.skippedNoSignal += 1;
       }
     }
 
@@ -82,6 +108,7 @@ module.exports = async function handler(req, res) {
       range: { start, end },
       count: results.length,
       results,
+      debug,
     };
     cache.set(cacheKey, { at: Date.now(), data: payload });
     return res.status(200).json(payload);
