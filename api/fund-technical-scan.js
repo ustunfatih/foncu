@@ -1,5 +1,5 @@
 const supabase = require('./_lib/supabase');
-const { fetchFundHistoryBatch } = require('./_lib/history');
+const { fetchFundHistoryBatch, normalizeCode } = require('./_lib/history');
 const { calculateRsi, calculateSma } = require('./_lib/analytics');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -51,12 +51,12 @@ module.exports = async function handler(req, res) {
       throw new Error(error.message);
     }
 
-    const codes = (funds || []).map((fund) => fund.code);
+    const codes = (funds || []).map((fund) => normalizeCode(fund.code)).filter(Boolean);
     const historyByCode = await fetchFundHistoryBatch(codes, start, end);
 
     const results = [];
     for (const fund of funds || []) {
-      const history = historyByCode[fund.code] || [];
+      const history = historyByCode[normalizeCode(fund.code)] || [];
       if (history.length < longPeriod + 2) continue;
 
       const rsi = calculateRsi(history, 14);
