@@ -1,5 +1,5 @@
 const supabase = require('./_lib/supabase');
-const { fetchFundHistory } = require('./_lib/history');
+const { fetchFundHistoryBatch, normalizeCode } = require('./_lib/history');
 const {
   calculateSharpeRatio,
   calculateVolatility,
@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
     const minReturn1y = parseNumber(req.query.minReturn1y);
     const minReturn1m = parseNumber(req.query.minReturn1m);
     const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const { start, end } = getDateOffset(365);
+    const { start, end } = getDateOffset(400);
 
     const { data: funds, error } = await supabase
       .from('funds')
@@ -43,10 +43,30 @@ module.exports = async function handler(req, res) {
       throw new Error(error.message);
     }
 
+    const codes = (funds || []).map((fund) => normalizeCode(fund.code)).filter(Boolean);
+    const historyByCode = await fetchFundHistoryBatch(codes, start, end);
+
     const results = [];
+    const debug = {
+      fundsTotal: (funds || []).length,
+      historyFound: 0,
+      historyMissing: 0,
+      skippedShortHistory: 0,
+      filteredReturn1y: 0,
+      filteredReturn1m: 0,
+    };
+
     for (const fund of funds || []) {
-      const history = await fetchFundHistory(fund.code, start, end);
-      if (history.length < 10) continue;
+      const history = historyByCode[normalizeCode(fund.code)] || [];
+      if (history.length === 0) {
+        debug.historyMissing += 1;
+        continue;
+      }
+      debug.historyFound += 1;
+      if (history.length < 10) {
+        debug.skippedShortHistory += 1;
+        continue;
+      }
 
       const return1m = calculateReturn(history, 30);
       const return1y = calculateReturn(history, 365);
@@ -54,8 +74,14 @@ module.exports = async function handler(req, res) {
       const volatility = calculateVolatility(history);
       const maxDrawdown = calculateMaxDrawdown(history);
 
-      if (minReturn1y !== null && (return1y === null || return1y * 100 < minReturn1y)) continue;
-      if (minReturn1m !== null && (return1m === null || return1m * 100 < minReturn1m)) continue;
+      if (minReturn1y !== null && (return1y === null || return1y * 100 < minReturn1y)) {
+        debug.filteredReturn1y += 1;
+        continue;
+      }
+      if (minReturn1m !== null && (return1m === null || return1m * 100 < minReturn1m)) {
+        debug.filteredReturn1m += 1;
+        continue;
+      }
 
       results.push({
         code: fund.code,
@@ -76,6 +102,7 @@ module.exports = async function handler(req, res) {
       range: { start, end },
       count: results.length,
       results,
+      debug,
     });
   } catch (error) {
     console.error('[fund-screen] failed', error);

@@ -150,7 +150,6 @@ export const fetchMarketEvents = async (start?: string, end?: string, type?: str
   if (start) url.searchParams.append('start', start);
   if (end) url.searchParams.append('end', end);
   if (type) url.searchParams.append('type', type);
-  const response = await fetchWithTimeout<Response>(url.toString());
-  const payload = await handleResponse<{ events: MarketEvent[] }>(response);
+  const payload = await fetchWithTimeout<{ events: MarketEvent[] }>(url.toString());
   return payload.events;
 };
