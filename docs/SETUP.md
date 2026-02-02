@@ -94,7 +94,7 @@ npm install
 cd ..
 
 # Start the development server (in one terminal)
-node dev-server.js
+node scripts/dev-server.js
 
 # In another terminal, start the frontend
 cd frontend
@@ -201,7 +201,7 @@ These can be added later to further improve the app:
 If you encounter issues:
 
 1. Check browser console for errors (F12 → Console)
-2. Check backend logs in terminal running `dev-server.js`
+2. Check backend logs in terminal running `scripts/dev-server.js`
 3. Verify Supabase tables exist (Table Editor in dashboard)
 4. Ensure all environment variables are set correctly
 

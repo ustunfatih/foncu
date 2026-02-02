@@ -39,7 +39,7 @@ npm run dev
 ### 3. Created Tools to Help You
 - **`frontend/public/clear-cache.html`** - Click one button to clear all cache
 - **`frontend/public/test-env.html`** - Check if environment variables are loaded correctly
-- **`TESTING_INSTRUCTIONS.md`** - Detailed guide for testing
+- **`docs/TESTING_INSTRUCTIONS.md`** - Detailed guide for testing
 
 ## 🧪 How to Test (You MUST Do This!)
 
@@ -147,7 +147,7 @@ After clearing your browser cache:
 
 ## 📚 Files You Can Reference
 
-1. **TESTING_INSTRUCTIONS.md** - Full testing guide with screenshots of what to expect
+1. **docs/TESTING_INSTRUCTIONS.md** - Full testing guide with screenshots of what to expect
 2. **http://localhost:5173/clear-cache.html** - One-click cache clearer
 3. **http://localhost:5173/test-env.html** - Environment variable checker
 
