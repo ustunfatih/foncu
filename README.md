@@ -129,7 +129,7 @@ npm run dev
 
 # Or separately:
 # Backend (port 3000)
-node dev-server.js
+node scripts/dev-server.js
 
 # Frontend (port 5173)
 cd frontend && npm run dev
