@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="tefas-crawler",
-    version="0.1.0",
+    version="0.5.0",
     author="Fatih Ustun",
     author_email="fatih@example.com",
     description="Crawler for Turkish Electronic Fund Trading Platform (TEFAS)",
@@ -41,9 +41,10 @@ setuptools.setup(
             "pylint>=2.17.0",
         ],
     },
-    entry_points={
-        "console_scripts": [
-            "tefas=tefas.cli:main",
-        ],
-    },
+    # CLI entry point - disabled until CLI module is implemented
+    # entry_points={
+    #     "console_scripts": [
+    #         "tefas=tefas.cli:main",
+    #     ],
+    # },
 )

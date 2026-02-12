@@ -27,20 +27,34 @@ const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
           onFocus={() => setIsOpen(true)}
           onBlur={() => setTimeout(() => setIsOpen(false), 200)}
           onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search funds"
+          aria-expanded={isOpen}
+          aria-autocomplete="list"
+          aria-controls={isOpen ? 'fund-listbox' : undefined}
+          aria-activedescendant={matches.length > 0 ? `fund-option-${matches[0].code}` : undefined}
+          role="combobox"
         />
         {isOpen && !loading && (
-          <ul className="checklist-dropdown">
+          <ul
+            id="fund-listbox"
+            className="checklist-dropdown"
+            role="listbox"
+            aria-label="Available funds"
+          >
             {matches.map((fund) => {
               const isSelected = selectedCodes.includes(fund.code);
               return (
                 <li
                   key={fund.code}
+                  id={`fund-option-${fund.code}`}
                   className={`checklist-item ${isSelected ? 'selected' : ''}`}
                   onMouseDown={(e) => {
                     e.preventDefault(); // Keep focus on input
                     if (!isSelected && isLimitReached) return;
                     onSelect(fund);
                   }}
+                  role="option"
+                  aria-selected={isSelected}
                 >
                   <input
                     type="checkbox"

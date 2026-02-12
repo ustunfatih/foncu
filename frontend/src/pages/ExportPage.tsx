@@ -21,6 +21,16 @@ const formatCountOrEmpty = (value: number | null | undefined) => (
     value === null || value === undefined || Number.isNaN(value) ? '' : numberFormatter.format(value)
 );
 
+// Security: Sanitize CSV fields to prevent formula injection
+export const sanitizeCSV = (value: string): string => {
+    // Prefix formula-triggering characters with apostrophe to neutralize them
+    if (/^[=+\-@]/.test(value)) {
+        return "'" + value;
+    }
+    // Escape double quotes
+    return value.replace(/"/g, '""');
+};
+
 const ExportPage = ({ fundKind: initialFundKind }: ExportPageProps) => {
     const [fundKind, setFundKind] = useState<FundKind>(initialFundKind);
     const [allFunds, setAllFunds] = useState<FundSummary[]>([]);
@@ -258,9 +268,11 @@ const ExportPage = ({ fundKind: initialFundKind }: ExportPageProps) => {
 
         fundsData.forEach(({ code, title, details }) => {
             const history = details.priceHistory || details.investorHistory || details.marketCapHistory;
+            const safeCode = sanitizeCSV(code);
+            const safeTitle = sanitizeCSV(title);
 
             history?.forEach((point: any) => {
-                csv += `${code},"${title}"`;
+                csv += `${safeCode},"${safeTitle}"`;
                 if (selectedColumns.includes('fund_type')) csv += `,${fundKind}`;
                 if (selectedColumns.includes('date')) csv += `,${point.date}`;
                 if (selectedColumns.includes('price')) {

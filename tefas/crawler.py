@@ -216,8 +216,11 @@ def _get_client() -> httpx.Client:
     # Create SSL context with modern defaults
     ssl_context = ssl.create_default_context()
 
-    # Enable legacy server connect for servers that require it (like TEFAS)
-    # This is safer than the old approach as we use the proper constant
+    # SECURITY WARNING: Enable legacy server connect for servers that require it (like TEFAS)
+    # This allows unsafe SSL/TLS renegotiation which makes connections vulnerable to MITM attacks.
+    # This is required to connect to legacy TEFAS servers with outdated TLS configurations.
+    # TODO: Monitor upstream server for TLS upgrades and remove this workaround when possible.
+    # See: https://docs.python.org/3/library/ssl.html#ssl.OP_LEGACY_SERVER_CONNECT
     try:
         ssl_context.options |= ssl.OP_LEGACY_SERVER_CONNECT
     except AttributeError:

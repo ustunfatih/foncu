@@ -197,6 +197,18 @@ const colors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 const maColors = { MA50: '#f97316', MA200: '#22c55e' };
 ```
 
+## 📚 Documentation
+
+- **[Architecture Overview](./ARCHITECTURE.md)** - System architecture, data flow, and component relationships
+- **[API Reference](./API.md)** - Complete API documentation with examples
+- **[Contributing Guide](./CONTRIBUTING.md)** - Development setup and contribution guidelines
+- **[Changelog](./CHANGELOG.md)** - Version history and release notes
+
+### Setup Guides
+- [Setup Instructions](./docs/SETUP.md) - Step-by-step setup guide
+- [Vercel Deployment](./docs/VERCEL_SETUP.md) - Deployment instructions
+- [Testing Guide](./docs/TESTING_INSTRUCTIONS.md) - Testing and troubleshooting
+
 ## 📝 License
 
 [MIT](LICENSE)

@@ -31,7 +31,14 @@ const FundCard = ({ fund, onRemove, color }: Props) => {
             </span>
           )}
         </div>
-        <button className="remove-btn" onClick={() => onRemove(fund.code)}>×</button>
+        <button
+          className="remove-btn"
+          onClick={() => onRemove(fund.code)}
+          aria-label={`Remove fund ${fund.code}`}
+          title="Remove fund"
+        >
+          ×
+        </button>
       </div>
 
       {latestPrice !== null && (

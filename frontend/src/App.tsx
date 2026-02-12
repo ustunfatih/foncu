@@ -272,10 +272,17 @@ const App = () => {
           {user ? (
             <>
               <span style={{ fontSize: 14, color: '#64748b' }}>{user.email || user.user_metadata?.user_name}</span>
-              <button className="chip active" onClick={savePortfolio} disabled={selectedCodes.length === 0}>
+              <button
+                className="chip active"
+                onClick={savePortfolio}
+                disabled={selectedCodes.length === 0}
+                aria-label="Save portfolio"
+              >
                 💾 Kaydet
               </button>
-              <button className="chip" onClick={signOut}>Çıkış</button>
+              <button className="chip" onClick={signOut} aria-label="Sign out">
+                Çıkış
+              </button>
             </>
           ) : (
             <button
@@ -283,8 +290,9 @@ const App = () => {
               onClick={signInWithGithub}
               disabled={!isAuthEnabled}
               title={!isAuthEnabled ? 'Supabase ortam değişkenleri eksik.' : 'GitHub ile giriş'}
+              aria-label="Sign in with GitHub"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
               </svg>
               GitHub ile Giriş
@@ -295,68 +303,128 @@ const App = () => {
       </header>
 
       {/* Tab Navigation */}
-      <div className="tabs">
+      <div className="tabs" role="tablist" aria-label="Main navigation">
         <button
           className={`tab ${activeTab === 'home' ? 'active' : ''}`}
           onClick={() => setActiveTab('home')}
+          role="tab"
+          aria-selected={activeTab === 'home'}
+          aria-controls="home-panel"
+          id="home-tab"
         >
           Anasayfa
         </button>
         <button
           className={`tab ${activeTab === 'screener' ? 'active' : ''}`}
           onClick={() => setActiveTab('screener')}
+          role="tab"
+          aria-selected={activeTab === 'screener'}
+          aria-controls="screener-panel"
+          id="screener-tab"
         >
           Fon Tarayıcı
         </button>
         <button
           className={`tab ${activeTab === 'portfolio' ? 'active' : ''}`}
           onClick={() => setActiveTab('portfolio')}
+          role="tab"
+          aria-selected={activeTab === 'portfolio'}
+          aria-controls="portfolio-panel"
+          id="portfolio-tab"
         >
           Portföy
         </button>
         <button
           className={`tab ${activeTab === 'benchmark' ? 'active' : ''}`}
           onClick={() => setActiveTab('benchmark')}
+          role="tab"
+          aria-selected={activeTab === 'benchmark'}
+          aria-controls="benchmark-panel"
+          id="benchmark-tab"
         >
           Benchmark
         </button>
         <button
           className={`tab ${activeTab === 'macro' ? 'active' : ''}`}
           onClick={() => setActiveTab('macro')}
+          role="tab"
+          aria-selected={activeTab === 'macro'}
+          aria-controls="macro-panel"
+          id="macro-tab"
         >
           Makro
         </button>
         <button
           className={`tab ${activeTab === 'technical' ? 'active' : ''}`}
           onClick={() => setActiveTab('technical')}
+          role="tab"
+          aria-selected={activeTab === 'technical'}
+          aria-controls="technical-panel"
+          id="technical-tab"
         >
           Teknik Tarama
         </button>
         <button
           className={`tab ${activeTab === 'events' ? 'active' : ''}`}
           onClick={() => setActiveTab('events')}
+          role="tab"
+          aria-selected={activeTab === 'events'}
+          aria-controls="events-panel"
+          id="events-tab"
         >
           Takvim
         </button>
         <button
           className={`tab ${activeTab === 'export' ? 'active' : ''}`}
           onClick={() => setActiveTab('export')}
+          role="tab"
+          aria-selected={activeTab === 'export'}
+          aria-controls="export-panel"
+          id="export-tab"
         >
           Export
         </button>
       </div>
 
       {/* Conditional Page Rendering */}
-      {activeTab === 'export' && <ExportPage fundKind={fundKind} />}
-      {activeTab === 'screener' && <FundScreenerPage />}
-      {activeTab === 'portfolio' && <PortfolioPage />}
-      {activeTab === 'benchmark' && <BenchmarkPage />}
-      {activeTab === 'macro' && <MacroPage />}
-      {activeTab === 'technical' && <TechnicalScannerPage />}
-      {activeTab === 'events' && <EventsPage />}
+      {activeTab === 'export' && (
+        <div role="tabpanel" id="export-panel" aria-labelledby="export-tab">
+          <ExportPage fundKind={fundKind} />
+        </div>
+      )}
+      {activeTab === 'screener' && (
+        <div role="tabpanel" id="screener-panel" aria-labelledby="screener-tab">
+          <FundScreenerPage />
+        </div>
+      )}
+      {activeTab === 'portfolio' && (
+        <div role="tabpanel" id="portfolio-panel" aria-labelledby="portfolio-tab">
+          <PortfolioPage />
+        </div>
+      )}
+      {activeTab === 'benchmark' && (
+        <div role="tabpanel" id="benchmark-panel" aria-labelledby="benchmark-tab">
+          <BenchmarkPage />
+        </div>
+      )}
+      {activeTab === 'macro' && (
+        <div role="tabpanel" id="macro-panel" aria-labelledby="macro-tab">
+          <MacroPage />
+        </div>
+      )}
+      {activeTab === 'technical' && (
+        <div role="tabpanel" id="technical-panel" aria-labelledby="technical-tab">
+          <TechnicalScannerPage />
+        </div>
+      )}
+      {activeTab === 'events' && (
+        <div role="tabpanel" id="events-panel" aria-labelledby="events-tab">
+          <EventsPage />
+        </div>
+      )}
 
       {activeTab === 'home' && (
-        <>
+        <div role="tabpanel" id="home-panel" aria-labelledby="home-tab">
           {error && (
             <div className="card" style={{ background: '#fef2f2', borderColor: '#fecaca', marginBottom: 16 }}>
               <p style={{ color: '#dc2626', margin: 0 }}>Error: {error}</p>
@@ -521,7 +589,7 @@ const App = () => {
               </p>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

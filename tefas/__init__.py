@@ -16,7 +16,8 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
-# static checker hack
-STATIC_CHECKER_HACK = False
-if STATIC_CHECKER_HACK:
+# TYPE_CHECKING workaround for static analysis tools
+# This ensures Crawler is available for type checkers without causing import loops
+STATIC_CHECKER_WORKAROUND = False
+if STATIC_CHECKER_WORKAROUND:
     from tefas.crawler import Crawler
