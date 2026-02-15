@@ -3,8 +3,8 @@ const app = express();
 const port = 3000;
 
 // Import handlers
-const fundsHandler = require('./api/funds');
-const fundHistoryHandler = require('./api/fund-history');
+const fundsHandler = require('../api/funds');
+const fundHistoryHandler = require('../api/fund-history');
 
 // Mock Vercel req/res
 const wrapHandler = (handler) => async (req, res) => {

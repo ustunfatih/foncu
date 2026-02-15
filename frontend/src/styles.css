@@ -341,6 +341,10 @@ body {
   gap: 12px !important;
 }
 
+.checklist-item.active {
+  background: #e2e8f0;
+}
+
 .checklist-checkbox {
   width: 18px;
   height: 18px;
@@ -457,6 +461,18 @@ body {
   color: #dc2626;
   margin-bottom: 16px;
   font-weight: 500;
+}
+
+.alert-message {
+  margin-top: 8px;
+  color: #991b1b;
+  background: #fee2e2;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .table-wrapper {
