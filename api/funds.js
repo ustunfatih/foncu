@@ -18,14 +18,20 @@ const uniqueByCode = (rows) => {
 module.exports = async function handler(req, res) {
   try {
     const kind = (req.query.kind || 'YAT').toString().toUpperCase();
-    // Use a date 2 days ago to ensure TEFAS has data (system date may be incorrect)
+    // Use a range of last 5 days to ensure we get the latest data (holidays/weekends)
     const today = new Date();
-    const twoDaysAgo = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000);
-    const formatted = formatDate(twoDaysAgo);
-    console.log(`[funds] Fetching funds for ${kind} on date: ${formatted}`);
+    const fiveDaysAgo = new Date(today.getTime() - 5 * 24 * 60 * 60 * 1000);
+    const startFormatted = formatDate(fiveDaysAgo);
+    const endFormatted = formatDate(today);
+    console.log(`[funds] Fetching funds for ${kind} from ${startFormatted} to ${endFormatted}`);
+
     const cookie = await bootstrapSession();
-    const info = await fetchInfo({ start: formatted, end: formatted, kind, cookie });
+    const info = await fetchInfo({ start: startFormatted, end: endFormatted, kind, cookie });
     console.log(`[funds] Received ${info.length} fund records from TEFAS`);
+
+    // Sort by date descending so uniqueByCode picks the latest one
+    info.sort((a, b) => Number(b.TARIH) - Number(a.TARIH));
+
     const funds = uniqueByCode(info).map((entry) => ({
       code: entry.FONKODU?.toUpperCase(),
       title: entry.FONUNVAN,

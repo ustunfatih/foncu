@@ -107,17 +107,33 @@ module.exports = async function handler(req, res) {
     console.log(`[Cache] ${code}: hasEnoughData=${hasEnoughData}, coversFullRange=${coversFullRange}, isFresh=${isFresh}, cacheIsValid=${cacheIsValid}`);
 
     let info = [];
+    let newData = [];
     if (!cacheIsValid) {
-      console.log(`[Cache] Cache incomplete for ${code}. Fetching from TEFAS...`);
-      const chunks = calculateChunks(startDate, endDate);
+      let fetchStart = startDate;
+      // If we have enough data covering the start, but it's just not fresh, only fetch the missing tail
+      if (hasEnoughData && coversFullRange && !isFresh && lastCachedDate) {
+        fetchStart = new Date(lastCachedDate.getTime() + 24 * 60 * 60 * 1000);
+        console.log(`[Cache] Incremental update for ${code}. Fetching from ${formatDate(fetchStart)} to ${formatDate(endDate)}`);
+      } else {
+        console.log(`[Cache] Full fetch for ${code}. Fetching from ${formatDate(startDate)} to ${formatDate(endDate)}`);
+      }
+
+      const chunks = calculateChunks(fetchStart, endDate);
       const allInfoResults = [];
-      for (const chunk of chunks) {
-        try {
-          const chunkData = await fetchInfo({ ...chunk, code, kind, cookie });
-          allInfoResults.push(...chunkData);
-        } catch (err) {
-          console.error(`[TEFAS] Failed to fetch chunk for ${code}:`, err.message);
-        }
+
+      // Process chunks in batches to improve performance while avoiding rate limits
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(batch.map(async (chunk) => {
+          try {
+            return await fetchInfo({ ...chunk, code, kind, cookie });
+          } catch (err) {
+            console.error(`[TEFAS] Failed to fetch chunk for ${code} (${chunk.start}-${chunk.end}):`, err.message);
+            return [];
+          }
+        }));
+        results.forEach(res => allInfoResults.push(...res));
       }
 
       // Merge with cache and deduplicate (prefer TEFAS data as it has FONUNVAN)
@@ -125,7 +141,7 @@ module.exports = async function handler(req, res) {
       cachedData.forEach(item => infoMap.set(item.TARIH, item));
       // Merge with existing cache
       const existingDates = new Set(cachedData.map(d => d.TARIH));
-      const newData = allInfoResults.filter(d => !existingDates.has(d.TARIH));
+      newData = allInfoResults.filter(d => !existingDates.has(d.TARIH));
       info = [...cachedData, ...newData].sort((a, b) => Number(a.TARIH) - Number(b.TARIH));
 
       // Update fundTitle from fetched data if not set
@@ -146,17 +162,19 @@ module.exports = async function handler(req, res) {
 
         if (fundError) console.error('[Supabase] Failed to sync fund metadata:', fundError);
 
-        const toUpsert = info.map(item => ({
-          fund_code: code,
-          date: new Date(Number(item.TARIH)).toISOString().split('T')[0],
-          price: Number(item.FIYAT) || 0,
-          market_cap: Number(item.PORTFOYBUYUKLUK) || 0,
-          investor_count: Number(item.KISISAYISI) || 0
-        }));
+        if (newData.length > 0) {
+          const toUpsert = newData.map(item => ({
+            fund_code: code,
+            date: new Date(Number(item.TARIH)).toISOString().split('T')[0],
+            price: Number(item.FIYAT) || 0,
+            market_cap: Number(item.PORTFOYBUYUKLUK) || 0,
+            investor_count: Number(item.KISISAYISI) || 0
+          }));
 
-        const { error: upsertError } = await supabase.from('historical_data').upsert(toUpsert, { onConflict: 'fund_code,date' });
-        if (upsertError) console.error('[Supabase] Failed to sync history:', upsertError);
-        else console.log(`[Supabase] Synced ${toUpsert.length} records for ${code}`);
+          const { error: upsertError } = await supabase.from('historical_data').upsert(toUpsert, { onConflict: 'fund_code,date' });
+          if (upsertError) console.error('[Supabase] Failed to sync history:', upsertError);
+          else console.log(`[Supabase] Synced ${toUpsert.length} new records for ${code}`);
+        }
       }
     } else {
       console.log(`[Cache] Using cached data for ${code} (${cachedData.length} records)`);
