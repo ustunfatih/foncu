@@ -12,7 +12,7 @@ import {
 } from './types';
 
 const RAW_API_BASE = import.meta.env.VITE_API_BASE || '';
-const REQUEST_TIMEOUT_MS = 30000;
+const REQUEST_TIMEOUT_MS = 60000;
 
 const getApiBase = (): string => {
   const trimmed = RAW_API_BASE.trim().replace(/\/$/, '');

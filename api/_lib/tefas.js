@@ -37,27 +37,36 @@ const bootstrapSession = async () => {
   return setCookie ? setCookie.split(',').map((c) => c.split(';')[0].trim()).join('; ') : '';
 };
 
-const doPost = async (endpoint, data, cookie) => {
-  const response = await fetch(`${ROOT_URL}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      ...defaultHeaders,
-      cookie,
-    },
-    body: new URLSearchParams(data),
-  });
+const doPost = async (endpoint, data, cookie, retries = 3) => {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(`${ROOT_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          ...defaultHeaders,
+          cookie,
+        },
+        body: new URLSearchParams(data),
+      });
 
-  if (!response.ok) {
-    throw new Error(`TEFAS request failed: ${response.status} ${response.statusText}`);
-  }
+      if (!response.ok) {
+        throw new Error(`TEFAS request failed: ${response.status} ${response.statusText}`);
+      }
 
-  const text = await response.text();
-  try {
-    const json = JSON.parse(text);
-    return json?.data ?? [];
-  } catch (err) {
-    console.error('[TEFAS] Invalid JSON response:', text.substring(0, 200));
-    throw new Error('TEFAS returned invalid response. Service may be temporarily unavailable.');
+      const text = await response.text();
+      try {
+        const json = JSON.parse(text);
+        return json?.data ?? [];
+      } catch (err) {
+        console.error('[TEFAS] Invalid JSON response:', text.substring(0, 200));
+        throw new Error('TEFAS returned invalid response. Service may be temporarily unavailable.');
+      }
+    } catch (err) {
+      if (attempt === retries - 1) throw err;
+      const delay = Math.pow(2, attempt) * 1000;
+      console.warn(`[TEFAS] Request failed, retrying in ${delay}ms... (Attempt ${attempt + 1}/${retries})`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
   }
 };
 
