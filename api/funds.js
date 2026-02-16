@@ -16,6 +16,15 @@ const uniqueByCode = (rows) => {
 };
 
 module.exports = async function handler(req, res) {
+  // Verify request is authorized
+  const authHeader = req.headers.authorization;
+  if (
+    !process.env.CRON_SECRET ||
+    authHeader !== `Bearer ${process.env.CRON_SECRET}`
+  ) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     const kind = (req.query.kind || 'YAT').toString().toUpperCase();
     // Use a range of last 5 days to ensure we get the latest data (holidays/weekends)
