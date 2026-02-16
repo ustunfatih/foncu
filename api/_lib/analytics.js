@@ -75,6 +75,34 @@ const calculateSma = (points, period) => {
   return result;
 };
 
+const calculateSmaTail = (points, period, count = 2) => {
+  if (!Array.isArray(points) || points.length < period || period <= 0 || count <= 0) return [];
+
+  const result = [];
+  const len = points.length;
+
+  let startWindowEndIndex = len - count;
+  if (startWindowEndIndex < period - 1) {
+    startWindowEndIndex = period - 1;
+  }
+
+  if (startWindowEndIndex >= len) return [];
+
+  let currentSum = 0;
+  for (let i = startWindowEndIndex - period + 1; i <= startWindowEndIndex; i += 1) {
+    currentSum += points[i].value;
+  }
+
+  result.push({ date: points[startWindowEndIndex].date, value: currentSum / period });
+
+  for (let i = startWindowEndIndex + 1; i < len; i += 1) {
+    currentSum = currentSum - points[i - period].value + points[i].value;
+    result.push({ date: points[i].date, value: currentSum / period });
+  }
+
+  return result;
+};
+
 const calculateRsi = (points, period = 14) => {
   if (!Array.isArray(points) || points.length <= period) return null;
   let gains = 0;
@@ -126,6 +154,7 @@ module.exports = {
   calculateVolatility,
   calculateMaxDrawdown,
   calculateSma,
+  calculateSmaTail,
   calculateRsi,
   calculateReturn,
 };

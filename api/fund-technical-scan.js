@@ -1,6 +1,6 @@
 const supabase = require('./_lib/supabase');
 const { fetchFundHistoryBatch, normalizeCode } = require('./_lib/history');
-const { calculateRsi, calculateSma } = require('./_lib/analytics');
+const { calculateRsi, calculateSmaTail } = require('./_lib/analytics');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const cache = new Map();
@@ -77,8 +77,8 @@ module.exports = async function handler(req, res) {
       }
 
       const rsi = calculateRsi(history, 14);
-      const shortSma = calculateSma(history, shortPeriod);
-      const longSma = calculateSma(history, longPeriod);
+      const shortSma = calculateSmaTail(history, shortPeriod, 2);
+      const longSma = calculateSmaTail(history, longPeriod, 2);
       const hasCross = detectSmaCross(shortSma, longSma);
 
       if (rsi !== null && rsi <= rsiBelow) {
