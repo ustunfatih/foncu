@@ -7,6 +7,7 @@ const {
   calculateVolatility,
   calculateMaxDrawdown,
   calculateSma,
+  calculateSmaTail,
   calculateRsi,
   calculateReturn,
 } = require('../../api/_lib/analytics');
@@ -43,6 +44,22 @@ test('calculateSma returns expected size', () => {
   const sma = calculateSma(points, 3);
   assert.equal(sma.length, 3);
   assert.equal(sma[0].value.toFixed(2), '101.00');
+});
+
+test('calculateSmaTail returns expected values', () => {
+  const sma = calculateSma(points, 3);
+  const tail = calculateSmaTail(points, 3, 2);
+  assert.equal(tail.length, 2);
+  // Last element of sma should match last element of tail
+  assert.equal(sma[sma.length - 1].value, tail[tail.length - 1].value);
+  assert.equal(sma[sma.length - 2].value, tail[tail.length - 2].value);
+});
+
+test('calculateSmaTail handles small history', () => {
+  const tail = calculateSmaTail(points, 3, 10);
+  const sma = calculateSma(points, 3);
+  assert.equal(tail.length, sma.length);
+  assert.deepEqual(tail, sma);
 });
 
 test('calculateRsi returns a bounded value', () => {

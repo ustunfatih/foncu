@@ -1,8 +1,5 @@
 const { bootstrapSession, fetchInfo, formatDate, toISO } = require('./_lib/tefas');
 const supabase = require('./_lib/supabase');
-const nonTefasFunds = require('./_lib/nonTefasFunds.json');
-
-const nonTefasSet = new Set(nonTefasFunds.funds.map(code => code.toUpperCase()));
 
 const uniqueByCode = (rows) => {
   const seen = new Set();
@@ -16,6 +13,15 @@ const uniqueByCode = (rows) => {
 };
 
 module.exports = async function handler(req, res) {
+  // Verify request is authorized
+  const authHeader = req.headers.authorization;
+  if (
+    !process.env.CRON_SECRET ||
+    authHeader !== `Bearer ${process.env.CRON_SECRET}`
+  ) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     const kind = (req.query.kind || 'YAT').toString().toUpperCase();
     // Use a range of last 5 days to ensure we get the latest data (holidays/weekends)
@@ -55,6 +61,6 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ funds, asOf: toISO(today) });
   } catch (error) {
     console.error('[funds] failed', error);
-    return res.status(500).json({ error: 'Failed to load funds', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load funds', detail: 'Internal Server Error' });
   }
 };

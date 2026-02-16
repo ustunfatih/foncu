@@ -4,6 +4,7 @@ Crawls public investment fund information from Turkey Electronic Fund Trading Pl
 """
 
 import logging
+import os
 import ssl
 from datetime import datetime, date
 from typing import Dict, List, Optional, Union
@@ -23,6 +24,10 @@ from tefas.schema import BreakdownSchema, InfoSchema
 
 # Configure module logger
 logger = logging.getLogger(__name__)
+
+# SSL Context Option for legacy servers
+# Define it here for compatibility with Python/OpenSSL versions where it might be missing
+OP_LEGACY_SERVER_CONNECT = getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
 
 
 class Crawler:
@@ -48,7 +53,7 @@ class Crawler:
     4  2020-11-16  YAC  1.827832
     """
 
-    root_url = "https://fundturkey.com.tr"
+    root_url = os.getenv("TEFAS_ROOT_URL", "https://fundturkey.com.tr")
     detail_endpoint = "/api/DB/BindHistoryAllocation"
     info_endpoint = "/api/DB/BindHistoryInfo"
     headers = {
@@ -64,7 +69,9 @@ class Crawler:
         "Referer": "https://fundturkey.com.tr/TarihselVeriler.aspx",
     }
 
-    def __init__(self):
+    def __init__(self, root_url: Optional[str] = None):
+        if root_url:
+            self.root_url = root_url
         self.client = _get_client()
         # Initial request to establish cookies
         _ = self.client.get(self.root_url)
@@ -218,12 +225,7 @@ def _get_client() -> httpx.Client:
 
     # Enable legacy server connect for servers that require it (like TEFAS)
     # This is safer than the old approach as we use the proper constant
-    try:
-        ssl_context.options |= ssl.OP_LEGACY_SERVER_CONNECT
-    except AttributeError:
-        # OP_LEGACY_SERVER_CONNECT may not be available on older Python/OpenSSL
-        # Fall back to the numeric value (0x4) if needed
-        ssl_context.options |= 0x4
+    ssl_context.options |= OP_LEGACY_SERVER_CONNECT
 
     return httpx.Client(
         verify=ssl_context,
