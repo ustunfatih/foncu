@@ -1,8 +1,5 @@
 const { bootstrapSession, fetchInfo, formatDate, toISO } = require('./_lib/tefas');
 const supabase = require('./_lib/supabase');
-const nonTefasFunds = require('./_lib/nonTefasFunds.json');
-
-const nonTefasSet = new Set(nonTefasFunds.funds.map(code => code.toUpperCase()));
 
 const uniqueByCode = (rows) => {
   const seen = new Set();
