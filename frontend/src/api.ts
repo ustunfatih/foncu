@@ -18,7 +18,7 @@ const getApiBase = (): string => {
   const trimmed = RAW_API_BASE.trim().replace(/\/$/, '');
   if (trimmed) return trimmed;
   if (typeof window !== 'undefined') return window.location.origin;
-  return '';
+  throw new Error('API base URL is not configured');
 };
 
 const handleResponse = async <T>(response: Response): Promise<T> => {
@@ -55,9 +55,6 @@ const fetchWithTimeout = async <T>(
 
 export const fetchFunds = async (kind: FundKind = 'YAT'): Promise<FundSummary[]> => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const response = await fetchWithTimeout<{ funds: FundSummary[] }>(
     `${apiBase}/api/funds?kind=${kind}`
   );
@@ -70,9 +67,6 @@ export const fetchFundDetails = async (
   days?: number
 ): Promise<FundOverview> => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const url = new URL(`${apiBase}/api/fund-history`);
   url.searchParams.append('code', code);
   url.searchParams.append('kind', kind);
@@ -84,9 +78,6 @@ export const fetchFundDetails = async (
 
 export const fetchFundRisk = async (code: string, days = 365): Promise<FundRiskResponse> => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const url = new URL(`${apiBase}/api/fund-risk`);
   url.searchParams.append('code', code);
   url.searchParams.append('days', days.toString());
@@ -95,9 +86,6 @@ export const fetchFundRisk = async (code: string, days = 365): Promise<FundRiskR
 
 export const fetchFundScreen = async (kind: FundKind, minReturn1y?: number, minReturn1m?: number) => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const url = new URL(`${apiBase}/api/fund-screen`);
   url.searchParams.append('kind', kind);
   if (minReturn1y !== undefined) url.searchParams.append('minReturn1y', String(minReturn1y));
@@ -108,9 +96,6 @@ export const fetchFundScreen = async (kind: FundKind, minReturn1y?: number, minR
 
 export const fetchPortfolioValuation = async (holdings: PortfolioHoldingInput[]): Promise<PortfolioValuation> => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   return fetchWithTimeout<PortfolioValuation>(`${apiBase}/api/portfolio-valuation`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -120,9 +105,6 @@ export const fetchPortfolioValuation = async (holdings: PortfolioHoldingInput[])
 
 export const fetchMacroSeries = async (symbol = 'USDTRY', days = 365): Promise<MacroSeries> => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const url = new URL(`${apiBase}/api/macro-series`);
   url.searchParams.append('symbol', symbol);
   url.searchParams.append('days', days.toString());
@@ -131,9 +113,6 @@ export const fetchMacroSeries = async (symbol = 'USDTRY', days = 365): Promise<M
 
 export const fetchTechnicalScan = async (kind: FundKind, rsiBelow = 30) => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const url = new URL(`${apiBase}/api/fund-technical-scan`);
   url.searchParams.append('kind', kind);
   url.searchParams.append('rsiBelow', rsiBelow.toString());
@@ -143,9 +122,6 @@ export const fetchTechnicalScan = async (kind: FundKind, rsiBelow = 30) => {
 
 export const fetchMarketEvents = async (start?: string, end?: string, type?: string): Promise<MarketEvent[]> => {
   const apiBase = getApiBase();
-  if (!apiBase) {
-    throw new Error('API base URL is not configured');
-  }
   const url = new URL(`${apiBase}/api/market-events`);
   if (start) url.searchParams.append('start', start);
   if (end) url.searchParams.append('end', end);
