@@ -136,6 +136,72 @@ class TestCrawlerUnit:
         assert "`kind` should be one of" in str(exc_info.value)
         crawler.close()
 
+    @patch('tefas.crawler._get_client')
+    def test_fetch_with_columns(self, mock_get_client):
+        """Test fetch with columns parameter returns only requested columns"""
+        mock_client = MagicMock(spec=httpx.Client)
+        mock_client.get.return_value = MagicMock(status_code=200)
+
+        # Mock responses for info and detail endpoints
+        # The crawler makes two POST requests: one for info, one for detail
+        mock_response_info = MagicMock()
+        mock_response_info.json.return_value = {
+            "data": [
+                {
+                    "FONKODU": "AAA",
+                    "TARIH": 1605830400000,  # 2020-11-20
+                    "FIYAT": 1.5,
+                    "FONUNVAN": "Test Fund A"
+                },
+                {
+                    "FONKODU": "BBB",
+                    "TARIH": 1605830400000,
+                    "FIYAT": 2.5,
+                    "FONUNVAN": "Test Fund B"
+                }
+            ]
+        }
+        mock_response_info.raise_for_status = MagicMock()
+
+        mock_response_detail = MagicMock()
+        mock_response_detail.json.return_value = {
+            "data": [
+                {
+                    "FONKODU": "AAA",
+                    "TARIH": 1605830400000,
+                    "HS": 20.0
+                },
+                {
+                    "FONKODU": "BBB",
+                    "TARIH": 1605830400000,
+                    "HS": 30.0
+                }
+            ]
+        }
+        mock_response_detail.raise_for_status = MagicMock()
+
+        # Configure side_effect to return info first, then detail
+        mock_client.post.side_effect = [mock_response_info, mock_response_detail]
+        mock_get_client.return_value = mock_client
+
+        crawler = Crawler()
+
+        # Test fetching specific columns
+        columns = ["code", "date", "price"]
+        df = crawler.fetch(start="2020-11-20", columns=columns)
+
+        # Verify columns
+        assert list(df.columns) == columns
+
+        # Verify data content
+        assert len(df) == 2
+        assert df.iloc[0]["code"] == "AAA"
+        assert df.iloc[0]["price"] == 1.5
+        # Date should be formatted as YYYY-MM-DD due to schema load
+        assert df.iloc[0]["date"] == date(2020, 11, 20)
+
+        crawler.close()
+
 
 class TestGetClient:
     """Test the _get_client function"""
