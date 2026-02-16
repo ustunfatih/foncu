@@ -83,9 +83,48 @@ const fetchLatestPrice = async (code) => {
   };
 };
 
+const fetchLatestPriceBatch = async (codes) => {
+  if (!supabase || !Array.isArray(codes) || codes.length === 0) return {};
+  const normalizedCodes = codes
+    .map(normalizeCode)
+    .filter((code, index, array) => code && array.indexOf(code) === index);
+
+  if (normalizedCodes.length === 0) return {};
+
+  // Fetch data for the last 30 days to ensure we get the latest price even if some days are missing
+  const oneMonthAgo = new Date();
+  oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+  const startDate = oneMonthAgo.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('historical_data')
+    .select('fund_code, date, price')
+    .in('fund_code', normalizedCodes)
+    .gte('date', startDate)
+    .order('date', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const latestPrices = {};
+  for (const row of data || []) {
+    // Since rows are ordered by date DESC, the first occurrence of a fund_code is the latest
+    if (!latestPrices[row.fund_code]) {
+      latestPrices[row.fund_code] = {
+        date: row.date,
+        value: Number(row.price) || 0,
+      };
+    }
+  }
+
+  return latestPrices;
+};
+
 module.exports = {
   fetchFundHistory,
   fetchFundHistoryBatch,
   fetchLatestPrice,
+  fetchLatestPriceBatch,
   normalizeCode,
 };

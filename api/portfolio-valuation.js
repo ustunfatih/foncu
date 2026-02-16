@@ -1,5 +1,5 @@
 const supabase = require('./_lib/supabase');
-const { fetchLatestPrice } = require('./_lib/history');
+const { fetchLatestPriceBatch } = require('./_lib/history');
 
 module.exports = async function handler(req, res) {
   try {
@@ -36,16 +36,24 @@ module.exports = async function handler(req, res) {
       return res.status(422).json({ error: 'Holdings contain no valid entries' });
     }
 
-    const latestPrices = await Promise.all(
-      normalizedHoldings.map(async (holding) => {
-        try {
-          const latest = await fetchLatestPrice(holding.code);
-          return { code: holding.code, latest };
-        } catch (error) {
-          return { code: holding.code, error };
-        }
-      })
-    );
+    const uniqueCodes = [...new Set(normalizedHoldings.map((h) => h.code))];
+    let latestPricesBatch = {};
+    let batchError = null;
+
+    try {
+      latestPricesBatch = await fetchLatestPriceBatch(uniqueCodes);
+    } catch (err) {
+      console.error('[portfolio-valuation] Batch fetch failed', err);
+      batchError = err;
+    }
+
+    const latestPrices = normalizedHoldings.map((holding) => {
+      if (batchError) {
+        return { code: holding.code, error: batchError };
+      }
+      const latest = latestPricesBatch[holding.code] || null;
+      return { code: holding.code, latest };
+    });
 
     const latestByCode = new Map(latestPrices.map((item) => [item.code, item]));
     const enriched = [];
