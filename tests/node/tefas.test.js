@@ -1,29 +1,33 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { formatDate } = require('../../api/_lib/tefas');
+const { toISO } = require('../../api/_lib/tefas');
 
-test('formatDate works with Date object', () => {
-  const date = new Date(2023, 0, 1); // January 1, 2023
-  const formatted = formatDate(date);
-  assert.equal(formatted, '01.01.2023');
+test('toISO converts numeric timestamp to YYYY-MM-DD', () => {
+  // 2024-01-01 00:00:00 UTC = 1704067200000
+  const timestamp = 1704067200000;
+  assert.equal(toISO(timestamp), '2024-01-01');
 });
 
-test('formatDate works with string input', () => {
-  // Using T12:00:00 ensures it is treated as local time
-  const input = '2023-10-05T12:00:00';
-  const formatted = formatDate(input);
-  assert.equal(formatted, '05.10.2023');
+test('toISO converts string timestamp to YYYY-MM-DD', () => {
+  // 2023-12-31 00:00:00 UTC = 1703980800000
+  const timestamp = '1703980800000';
+  assert.equal(toISO(timestamp), '2023-12-31');
 });
 
-test('formatDate works with timestamp', () => {
-  // Construct a timestamp that represents Jan 1st 2023 in local time
-  const timestamp = new Date(2023, 0, 1).getTime();
-  const formatted = formatDate(timestamp);
-  assert.equal(formatted, '01.01.2023');
+test('toISO handles single digit month and day correctly', () => {
+  // 2024-05-05 00:00:00 UTC = 1714867200000
+  const timestamp = 1714867200000;
+  assert.equal(toISO(timestamp), '2024-05-05');
 });
 
-test('formatDate pads single digit day and month', () => {
-  const date = new Date(2023, 8, 5); // September 5, 2023
-  const formatted = formatDate(date);
-  assert.equal(formatted, '05.09.2023');
+test('toISO handles leap year', () => {
+  // 2024-02-29 00:00:00 UTC = 1709164800000
+  const timestamp = 1709164800000;
+  assert.equal(toISO(timestamp), '2024-02-29');
+});
+
+test('toISO handles end of year', () => {
+  // 2023-12-31 00:00:00 UTC = 1703980800000
+  const timestamp = 1703980800000;
+  assert.equal(toISO(timestamp), '2023-12-31');
 });
