@@ -55,6 +55,6 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ funds, asOf: toISO(today) });
   } catch (error) {
     console.error('[funds] failed', error);
-    return res.status(500).json({ error: 'Failed to load funds', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load funds', detail: 'Internal Server Error' });
   }
 };
