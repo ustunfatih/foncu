@@ -159,6 +159,23 @@ class TestGetClient:
         assert client.follow_redirects is True
         client.close()
 
+    @patch('ssl.create_default_context')
+    def test_get_client_configures_ssl(self, mock_create_context):
+        """Test that client configures SSL context with legacy server connect option"""
+        mock_context = MagicMock()
+        mock_context.options = 0
+        mock_create_context.return_value = mock_context
+
+        # Call the function under test
+        client = _get_client()
+        client.close()
+
+        # Import the constant to check against
+        from tefas.crawler import OP_LEGACY_SERVER_CONNECT
+
+        # Verify that the option was set
+        assert (mock_context.options & OP_LEGACY_SERVER_CONNECT) == OP_LEGACY_SERVER_CONNECT
+
 
 class TestCrawlerIntegration:
     """Integration tests that require network access - skipped by default"""
