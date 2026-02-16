@@ -3,10 +3,10 @@ const supabase = require('./_lib/supabase');
 
 const FIVE_YEARS_IN_DAYS = 365 * 5;
 
+// Assumes rows are sorted by TARIH
 const buildHistoricalSeries = (rows, field) =>
   rows
     .filter((row) => row[field] !== undefined && row[field] !== null)
-    .sort((a, b) => Number(a.TARIH) - Number(b.TARIH))
     .map((row) => ({
       date: toISO(row.TARIH),
       value: Number(row[field]) || 0,
