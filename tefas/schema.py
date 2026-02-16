@@ -5,14 +5,8 @@ from datetime import date
 from marshmallow import Schema, fields, EXCLUDE, pre_load, post_load
 
 
-class InfoSchema(Schema):
-    date = fields.Date(data_key="TARIH", allow_none=True)
-    price = fields.Float(data_key="FIYAT", allow_none=True)
-    code = fields.String(data_key="FONKODU", allow_none=True)
-    title = fields.String(data_key="FONUNVAN", allow_none=True)
-    market_cap = fields.Float(data_key="PORTFOYBUYUKLUK", allow_none=True)
-    number_of_shares = fields.Float(data_key="TEDPAYSAYISI", allow_none=True)
-    number_of_investors = fields.Float(data_key="KISISAYISI", allow_none=True)
+class TarihConversionMixin:
+    """Mixin to convert TARIH field from timestamp to date string"""
 
     # pylint: disable=no-self-use
     # pylint: disable=unused-argument
@@ -29,21 +23,30 @@ class InfoSchema(Schema):
         except (ValueError, TypeError, OSError):
             return input_data
         return input_data
+    # pylint: enable=no-self-use
+    # pylint: enable=unused-argument
+
+
+class InfoSchema(TarihConversionMixin, Schema):
+    date = fields.Date(data_key="TARIH", allow_none=True)
+    price = fields.Float(data_key="FIYAT", allow_none=True)
+    code = fields.String(data_key="FONKODU", allow_none=True)
+    title = fields.String(data_key="FONUNVAN", allow_none=True)
+    market_cap = fields.Float(data_key="PORTFOYBUYUKLUK", allow_none=True)
+    number_of_shares = fields.Float(data_key="TEDPAYSAYISI", allow_none=True)
+    number_of_investors = fields.Float(data_key="KISISAYISI", allow_none=True)
 
     @post_load
-    def post_load_hook(self, output_data, **kwargs):
+    def post_load_hook(self, output_data, **kwargs):  # pylint: disable=unused-argument
         # Fill missing fields with default None
         output_data = {f: output_data.setdefault(f) for f in self.fields}
         return output_data
-
-    # pylint: enable=no-self-use
-    # pylint: enable=unused-argument
 
     class Meta:
         unknown = EXCLUDE
 
 
-class BreakdownSchema(Schema):
+class BreakdownSchema(TarihConversionMixin, Schema):
     code = fields.String(data_key="FONKODU", allow_none=True)
     date = fields.Date(data_key="TARIH", allow_none=True)
     bank_bills = fields.Float(data_key="BB", allow_none=True)  # Banka Bonosu
@@ -96,24 +99,8 @@ class BreakdownSchema(Schema):
     private_sector_international_lease_certificate = fields.Float(data_key="ÖKSYD", allow_none=True)  # Özel Sektör Yurt Dışı Kira Sertifikaları
     private_sector_foreign_debt_instruments = fields.Float(data_key="ÖSDB", allow_none=True)  # Özel Sektör Dış Borçlanma Araçları
 
-    # pylint: disable=no-self-use
-    # pylint: disable=unused-argument
-    @pre_load
-    def pre_load_hook(self, input_data, **kwargs):
-        if "TARIH" not in input_data or input_data["TARIH"] is None:
-            return input_data
-        try:
-            tarih_value = int(input_data["TARIH"])
-            if tarih_value <= 0:
-                return input_data
-            seconds_timestamp = tarih_value / 1000
-            input_data["TARIH"] = date.fromtimestamp(seconds_timestamp).isoformat()
-        except (ValueError, TypeError, OSError):
-            return input_data
-        return input_data
-
     @post_load
-    def post_load_hook(self, output_data, **kwargs):
+    def post_load_hook(self, output_data, **kwargs):  # pylint: disable=unused-argument
         # Replace None values with 0 for float fields
         output_data = {
             k: v
@@ -124,9 +111,6 @@ class BreakdownSchema(Schema):
         # Fill missing fields with default None
         output_data = {f: output_data.setdefault(f) for f in self.fields}
         return output_data
-
-    # pylint: enable=no-self-use
-    # pylint: enable=unused-argument
 
     class Meta:
         unknown = EXCLUDE
