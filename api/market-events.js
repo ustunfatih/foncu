@@ -15,6 +15,15 @@ const normalizeImpact = (value) => {
   return 'medium';
 };
 
+// Simple in-memory cache to prevent quota exhaustion
+// Vercel functions may reuse the container, preserving this cache across requests.
+const cache = {
+  data: null,
+  timestamp: 0,
+  promise: null,
+};
+const CACHE_TTL = 3600 * 1000; // 1 hour
+
 const fetchTradingEconomics = async () => {
   const apiKey = process.env.TRADING_ECONOMICS_KEY;
   if (!apiKey) return null;
@@ -40,15 +49,58 @@ const fetchTradingEconomics = async () => {
   });
 };
 
+const getCachedTradingEconomics = async () => {
+  const now = Date.now();
+
+  // Return cached data if valid
+  if (cache.data && (now - cache.timestamp < CACHE_TTL)) {
+    return cache.data;
+  }
+
+  // Return existing promise if fetch is in progress (thundering herd protection)
+  if (cache.promise) {
+    return cache.promise;
+  }
+
+  // Fetch new data
+  cache.promise = (async () => {
+    try {
+      const data = await fetchTradingEconomics();
+      if (data && data.length > 0) {
+        cache.data = data;
+        cache.timestamp = Date.now();
+      }
+      return data;
+    } catch (error) {
+      // If fetch fails, return potentially stale data if available
+      if (cache.data) {
+        console.warn('[market-events] Fetch failed, using stale cache:', error.message);
+        return cache.data;
+      }
+      throw error;
+    } finally {
+      cache.promise = null;
+    }
+  })();
+
+  return cache.promise;
+};
+
 module.exports = async function handler(req, res) {
   try {
+    // Add Cache-Control header to leverage CDN and browser caching
+    // public: cacheable by anyone (CDN)
+    // s-maxage=3600: CDN cache for 1 hour
+    // stale-while-revalidate=86400: Serve stale content while updating in background
+    res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+
     const type = (req.query.type || '').toString().toUpperCase();
     const start = parseDate(req.query.start);
     const end = parseDate(req.query.end);
 
     let events = localEvents.events || [];
     try {
-      const external = await fetchTradingEconomics();
+      const external = await getCachedTradingEconomics();
       if (external && external.length > 0) {
         events = external;
       }
