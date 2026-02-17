@@ -50,14 +50,24 @@ const fundKinds: { label: string; value: FundKind }[] = [
 // Chart colors for funds - matches PerformanceChart.tsx
 const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 
+const SELECTED_CODES_KEY = 'foncu_selectedCodes';
+
 const App = () => {
   const [activeTab, setActiveTab] = useState<'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export'>('home');
   const [fundKind, setFundKind] = useState<FundKind>('YAT');
+  const [pendingFundKind, setPendingFundKind] = useState<FundKind>('YAT');
   const [isNormalized, setIsNormalized] = useState(false);
   const [showMA, setShowMA] = useState(false);
   const [funds, setFunds] = useState<FundSummary[]>([]);
   const [selectedFunds, setSelectedFunds] = useState<FundOverview[]>([]);
-  const [selectedCodes, setSelectedCodes] = useState<{ code: string; kind: FundKind }[]>([]);
+  const [selectedCodes, setSelectedCodes] = useState<{ code: string; kind: FundKind }[]>(() => {
+    try {
+      const saved = localStorage.getItem(SELECTED_CODES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeTimeFilter, setActiveTimeFilter] = useState(timeFilters[3]); // 3M default
   const [activeMetric, setActiveMetric] = useState(metricFilters[0]); // Price default
   const [loadingFunds, setLoadingFunds] = useState(true);
@@ -100,6 +110,15 @@ const App = () => {
     };
     loadPortfolio();
   }, [isAuthEnabled, user]);
+
+  // Persist selected codes to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(SELECTED_CODES_KEY, JSON.stringify(selectedCodes));
+    } catch {
+      // ignore storage errors
+    }
+  }, [selectedCodes]);
 
   // Fetch fund list on mount or when kind changes
   useEffect(() => {
@@ -162,6 +181,12 @@ const App = () => {
     loadNewDetails();
     setSelectedFunds((prev) => prev.filter((f) => selectedCodes.some(s => s.code === f.code)));
   }, [selectedCodes, activeTimeFilter.days, activeMetric.key, refreshKey]);
+
+  const handleConfirmFundKind = useCallback(() => {
+    setFundKind(pendingFundKind);
+    setSelectedCodes([]);
+    setSelectedFunds([]);
+  }, [pendingFundKind]);
 
   const handleFundSelect = useCallback((fund: FundSummary) => {
     setSelectedCodes((prev) =>
@@ -370,17 +395,26 @@ const App = () => {
                 {fundKinds.map((kind) => (
                   <button
                     key={kind.value}
-                    className={`chip ${fundKind === kind.value ? 'active' : ''}`}
-                    onClick={() => setFundKind(kind.value)}
+                    className={`chip ${pendingFundKind === kind.value ? 'active' : ''}`}
+                    onClick={() => setPendingFundKind(kind.value)}
                   >
                     {kind.label}
                   </button>
                 ))}
+                <button
+                  className={`chip ${pendingFundKind !== fundKind ? 'active' : ''}`}
+                  onClick={handleConfirmFundKind}
+                  disabled={pendingFundKind === fundKind || loadingFunds}
+                  style={{ marginLeft: 8, opacity: pendingFundKind === fundKind ? 0.45 : 1 }}
+                >
+                  {loadingFunds ? 'Yükleniyor...' : 'Fonları Yükle'}
+                </button>
               </div>
             </div>
 
             <div className="filter-row">
               <FundSelector
+                key={fundKind}
                 funds={funds}
                 selectedCodes={selectedCodes.map(s => s.code)}
                 onSelect={handleFundSelect}
