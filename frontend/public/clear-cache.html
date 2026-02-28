@@ -141,24 +141,23 @@
             output.innerHTML = '<h3>Current Storage Contents:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
         }
 
-        // Auto-detect old Supabase URL
+        // Auto-detect stale Supabase data
         window.addEventListener('load', () => {
             const status = document.getElementById('status');
-            let hasOldUrl = false;
+            let hasSupabaseKeys = false;
 
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                const value = localStorage.getItem(key);
-                if (value && value.includes('kyvfnaytfvgkfnccteya')) {
-                    hasOldUrl = true;
+                if (key.includes('supabase') || key.startsWith('sb-')) {
+                    hasSupabaseKeys = true;
                     break;
                 }
             }
 
-            if (hasOldUrl) {
-                status.innerHTML = '<div class="info warning">⚠️ ESKİ SUPABASE URL TESPİT EDİLDİ! Lütfen "Tüm Cache ve Storage\'ı Temizle" butonuna tıklayın.</div>';
+            if (hasSupabaseKeys) {
+                status.innerHTML = '<div class="info warning">⚠️ Supabase verileri bulundu. Sorun yaşıyorsanız "Tüm Cache ve Storage\'ı Temizle" butonuna tıklayın.</div>';
             } else {
-                status.innerHTML = '<div class="info success">✅ Eski Supabase URL\'si bulunamadı. Storage temiz görünüyor.</div>';
+                status.innerHTML = '<div class="info success">✅ Storage temiz görünüyor.</div>';
             }
         });
     </script>
