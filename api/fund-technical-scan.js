@@ -3,6 +3,7 @@ const { fetchFundHistoryBatch, normalizeCode } = require('./_lib/history');
 const { calculateRsi, calculateSmaTail } = require('./_lib/analytics');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 50;
 const cache = new Map();
 
 const getDateOffset = (days) => {
@@ -110,10 +111,18 @@ module.exports = async function handler(req, res) {
       results,
       debug,
     };
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      let oldestKey = null;
+      let oldestTime = Infinity;
+      for (const [key, entry] of cache) {
+        if (entry.at < oldestTime) { oldestTime = entry.at; oldestKey = key; }
+      }
+      if (oldestKey) cache.delete(oldestKey);
+    }
     cache.set(cacheKey, { at: Date.now(), data: payload });
     return res.status(200).json(payload);
   } catch (error) {
     console.error('[fund-technical-scan] failed', error);
-    return res.status(500).json({ error: 'Failed to scan funds', detail: error.message });
+    return res.status(500).json({ error: 'Failed to scan funds' });
   }
 };

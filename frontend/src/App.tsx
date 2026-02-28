@@ -220,12 +220,18 @@ const App = () => {
     const days = activeTimeFilter.days === 'ybb' ? getDaysForYBB() : (activeTimeFilter.days as number);
     const dateMap: Record<string, Record<string, number>> = {};
 
-    // Helper to calculate Simple Moving Average on FULL data
+    // Helper to calculate Simple Moving Average on FULL data using sliding window O(n)
     const calculateSMA = (data: HistoricalPoint[], period: number): Map<string, number> => {
       const result = new Map<string, number>();
-      for (let i = period - 1; i < data.length; i++) {
-        const sum = data.slice(i - period + 1, i + 1).reduce((acc, p) => acc + p.value, 0);
-        result.set(data[i].date, sum / period);
+      if (data.length < period) return result;
+      let windowSum = 0;
+      for (let i = 0; i < period; i++) {
+        windowSum += data[i].value;
+      }
+      result.set(data[period - 1].date, windowSum / period);
+      for (let i = period; i < data.length; i++) {
+        windowSum += data[i].value - data[i - period].value;
+        result.set(data[i].date, windowSum / period);
       }
       return result;
     };
@@ -425,16 +431,16 @@ const App = () => {
             <div className="selected-funds-grid">
               {loadingDetails && selectedCodes.length > selectedFunds.length ? (
                 <>
-                  {selectedFunds.map(fund => (
-                    <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} />
+                  {selectedFunds.map((fund, index) => (
+                    <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
                   ))}
                   {Array.from({ length: selectedCodes.length - selectedFunds.length }).map((_, i) => (
                     <FundCardSkeleton key={`skeleton-${i}`} />
                   ))}
                 </>
               ) : (
-                selectedFunds.map(fund => (
-                  <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} />
+                selectedFunds.map((fund, index) => (
+                  <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
                 ))
               )}
             </div>

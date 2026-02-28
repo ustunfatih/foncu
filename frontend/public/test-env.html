@@ -55,42 +55,30 @@
         envHtml += `VITE_SUPABASE_ANON_KEY: ${supabaseKey ? '✅ SET (length: ' + supabaseKey.length + ')' : '❌ NOT SET'}\n`;
         envHtml += '</pre>';
 
-        if (supabaseUrl === 'https://hirpfdwsnzqgzdfyxriv.supabase.co') {
-            envHtml += '<p class="success">✅ Correct Supabase URL is loaded!</p>';
-        } else if (supabaseUrl === 'https://kyvfnaytfvgkfnccteya.supabase.co') {
-            envHtml += '<p class="error">❌ OLD Supabase URL detected! Please restart Vite dev server.</p>';
+        if (supabaseUrl && supabaseUrl.endsWith('.supabase.co')) {
+            envHtml += '<p class="success">✅ Supabase URL is configured</p>';
         } else {
-            envHtml += '<p class="warning">⚠️ Unknown or missing Supabase URL</p>';
+            envHtml += '<p class="warning">⚠️ Missing or invalid Supabase URL</p>';
         }
 
         envCheck.innerHTML = envHtml;
 
         // Check localStorage for old Supabase data
         let storageHtml = '<h3>LocalStorage Supabase Keys:</h3><pre>';
-        let hasOldUrl = false;
-        let hasNewUrl = false;
+        let hasSupabaseData = false;
 
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key.includes('supabase') || key.startsWith('sb-')) {
                 const value = localStorage.getItem(key);
                 storageHtml += `${key}: ${value.substring(0, 100)}...\n`;
-
-                if (value.includes('kyvfnaytfvgkfnccteya')) {
-                    hasOldUrl = true;
-                }
-                if (value.includes('hirpfdwsnzqgzdfyxriv')) {
-                    hasNewUrl = true;
-                }
+                hasSupabaseData = true;
             }
         }
         storageHtml += '</pre>';
 
-        if (hasOldUrl) {
-            storageHtml += '<p class="error">❌ OLD Supabase URL found in localStorage!</p>';
-            storageHtml += '<p>Go to <a href="/clear-cache.html" style="color: #60a5fa;">/clear-cache.html</a> to clear it.</p>';
-        } else if (hasNewUrl) {
-            storageHtml += '<p class="success">✅ New Supabase URL found in localStorage</p>';
+        if (hasSupabaseData) {
+            storageHtml += '<p class="success">✅ Supabase data found in localStorage</p>';
         } else {
             storageHtml += '<p class="warning">⚠️ No Supabase data in localStorage (clean state)</p>';
         }

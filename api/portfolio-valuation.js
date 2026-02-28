@@ -97,6 +97,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error('[portfolio-valuation] failed', error);
-    return res.status(500).json({ error: 'Failed to value portfolio', detail: error.message });
+    return res.status(500).json({ error: 'Failed to value portfolio' });
   }
 };

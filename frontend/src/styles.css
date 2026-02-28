@@ -208,6 +208,21 @@ body {
   font-size: 12px;
 }
 
+.badge-danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.badge-warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.badge-success {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
 .chart-wrapper {
   height: 320px;
 }
