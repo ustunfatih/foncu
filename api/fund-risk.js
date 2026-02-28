@@ -49,6 +49,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error('[fund-risk] failed', error);
-    return res.status(500).json({ error: 'Failed to load fund risk', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load fund risk' });
   }
 };

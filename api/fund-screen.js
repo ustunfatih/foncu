@@ -106,6 +106,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error('[fund-screen] failed', error);
-    return res.status(500).json({ error: 'Failed to load fund screen', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load fund screen' });
   }
 };

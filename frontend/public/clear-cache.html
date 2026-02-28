@@ -90,37 +90,18 @@
             const output = document.getElementById('output');
 
             try {
-                // Clear localStorage
-                const localStorageKeys = Object.keys(localStorage);
-                localStorageKeys.forEach(key => {
-                    if (key.includes('supabase') || key.includes('sb-')) {
-                        console.log('Deleting from localStorage:', key);
-                        localStorage.removeItem(key);
-                    }
+                // Clear app-specific keys from localStorage and sessionStorage
+                const isAppKey = key => key.includes('foncu') || key.includes('supabase') || key.includes('sb-');
+
+                Object.keys(localStorage).filter(isAppKey).forEach(key => {
+                    console.log('Deleting from localStorage:', key);
+                    localStorage.removeItem(key);
                 });
 
-                // Clear sessionStorage
-                const sessionStorageKeys = Object.keys(sessionStorage);
-                sessionStorageKeys.forEach(key => {
-                    if (key.includes('supabase') || key.includes('sb-')) {
-                        console.log('Deleting from sessionStorage:', key);
-                        sessionStorage.removeItem(key);
-                    }
+                Object.keys(sessionStorage).filter(isAppKey).forEach(key => {
+                    console.log('Deleting from sessionStorage:', key);
+                    sessionStorage.removeItem(key);
                 });
-
-                // Clear all localStorage and sessionStorage (nuclear option)
-                localStorage.clear();
-                sessionStorage.clear();
-
-                // Clear IndexedDB
-                if (window.indexedDB) {
-                    indexedDB.databases().then(dbs => {
-                        dbs.forEach(db => {
-                            console.log('Deleting IndexedDB:', db.name);
-                            indexedDB.deleteDatabase(db.name);
-                        });
-                    });
-                }
 
                 status.innerHTML = '<div class="info success">✅ Tüm cache ve storage başarıyla temizlendi! Şimdi sayfayı yenileyin (Cmd+Shift+R veya Ctrl+Shift+R).</div>';
 

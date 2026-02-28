@@ -12,6 +12,8 @@ const buildRange = (days) => {
   };
 };
 
+const FETCH_TIMEOUT_MS = 15000;
+
 const fetchFromExchangeRateHost = async (config, startStr, endStr) => {
   const url = new URL('https://api.exchangerate.host/timeseries');
   url.searchParams.append('start_date', startStr);
@@ -22,7 +24,7 @@ const fetchFromExchangeRateHost = async (config, startStr, endStr) => {
     url.searchParams.append('access_key', process.env.EXCHANGE_RATE_HOST_KEY);
   }
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!response.ok) {
     throw new Error(`Macro source failed: ${response.status}`);
   }
@@ -42,7 +44,7 @@ const fetchFromFrankfurter = async (config, startStr, endStr) => {
   url.searchParams.append('from', config.base);
   url.searchParams.append('to', config.symbols);
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!response.ok) {
     throw new Error(`Frankfurter source failed: ${response.status}`);
   }
@@ -82,6 +84,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error('[macro-series] failed', error);
-    return res.status(500).json({ error: 'Failed to load macro series', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load macro series' });
   }
 };

@@ -126,6 +126,6 @@ module.exports = async function handler(req, res) {
     });
   } catch (error) {
     console.error('[market-events] failed', error);
-    return res.status(500).json({ error: 'Failed to load events', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load events' });
   }
 };

@@ -220,6 +220,6 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ fund });
   } catch (error) {
     console.error('[fund-history] failed', error);
-    return res.status(500).json({ error: 'Failed to load fund', detail: error.message });
+    return res.status(500).json({ error: 'Failed to load fund' });
   }
 };
