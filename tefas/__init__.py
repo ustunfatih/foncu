@@ -1,6 +1,4 @@
-# pylint: disable=unused-import
-# pylint: disable=import-outside-toplevel
-# pylint: disable=redefined-outer-name
+import typing
 
 __version__ = "0.5.0"
 __all__ = ["Crawler", "__version__"]
@@ -9,6 +7,7 @@ __all__ = ["Crawler", "__version__"]
 def __getattr__(name):
     # PEP-562: Lazy loaded attributes on python modules
     if name == "Crawler":
+        # pylint: disable=import-outside-toplevel
         from tefas.crawler import Crawler
 
         return Crawler
@@ -16,7 +15,5 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
-# static checker hack
-STATIC_CHECKER_HACK = False
-if STATIC_CHECKER_HACK:
+if typing.TYPE_CHECKING:
     from tefas.crawler import Crawler
