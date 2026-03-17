@@ -9,6 +9,10 @@ import {
   PortfolioValuation,
   TechnicalScanResult,
   MarketEvent,
+  FundProfile,
+  OverlapResult,
+  HoldingsScreenerResult,
+  PortfolioExposure,
 } from './types';
 
 const RAW_API_BASE = import.meta.env.VITE_API_BASE || '';
@@ -128,4 +132,45 @@ export const fetchMarketEvents = async (start?: string, end?: string, type?: str
   if (type) url.searchParams.append('type', type);
   const payload = await fetchWithTimeout<{ events: MarketEvent[] }>(url.toString());
   return payload.events;
+};
+
+// ── New endpoints added in overhaul ──────────────────────────────────────────
+
+export const fetchFundProfile = async (code: string): Promise<FundProfile> => {
+  const apiBase = getApiBase();
+  return fetchWithTimeout<FundProfile>(`${apiBase}/api/fund-profile?code=${encodeURIComponent(code)}`);
+};
+
+export const fetchOverlap = async (fundCodes: string[]): Promise<OverlapResult> => {
+  const apiBase = getApiBase();
+  return fetchWithTimeout<OverlapResult>(
+    `${apiBase}/api/overlap?funds=${fundCodes.map(encodeURIComponent).join(',')}`
+  );
+};
+
+export const fetchHoldingsScreener = async (params: {
+  ticker: string;
+  minWeight?: number;
+  fundType?: string;
+  limit?: number;
+}): Promise<HoldingsScreenerResult> => {
+  const apiBase = getApiBase();
+  const q = new URLSearchParams({
+    ticker: params.ticker,
+    minWeight: String(params.minWeight ?? 0),
+    fundType: params.fundType ?? 'mutual',
+    ...(params.limit !== undefined ? { limit: String(params.limit) } : {}),
+  });
+  return fetchWithTimeout<HoldingsScreenerResult>(`${apiBase}/api/holdings-screener?${q}`);
+};
+
+export const fetchPortfolioExposure = async (
+  holdings: Array<{ fundCode: string; shares: number; currentValue: number }>
+): Promise<PortfolioExposure> => {
+  const apiBase = getApiBase();
+  return fetchWithTimeout<PortfolioExposure>(`${apiBase}/api/portfolio-exposure`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ holdings }),
+  });
 };

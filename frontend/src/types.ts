@@ -96,9 +96,76 @@ export interface TechnicalScanResult {
 }
 
 export interface MarketEvent {
+  id: number;
   date: string;
   type: string;
+  ticker: string | null;
+  fundCode: string | null;
   title: string;
-  impact: 'low' | 'medium' | 'high';
-  note?: string;
+  description: string | null;
+  value: string | null;
+  kapId: number | null;
 }
+
+// ── New interfaces added in overhaul ──────────────────────────────────────────
+
+export interface FundProfile {
+  fon_kodu: string;
+  unvan: string;
+  fon_tipi: string;
+  portfoy_yonetim_sirketi: string | null;
+  risk_seviyesi: number | null;
+  stopaj: number | null;
+  yonetim_ucreti: number | null;
+  alis_valoru: number | null;
+  satis_valoru: number | null;
+  fon_kategorisi: string | null;
+  tefasa_acik: boolean | null;
+  metriks: {
+    getiri_1y: number | null;
+    getiri_1a: number | null;
+    fon_buyuklugu: number | null;
+    yatirimci_sayisi: number | null;
+    sharpe: number | null;
+    max_drawdown: number | null;
+    volatilite: number | null;
+  };
+  varlik_dagilimi: Array<{ kod: string; ad: string; agirlik: number }>;
+  topHoldings: Array<{ ticker: string; agirlik: number }>;
+  rapor: { yil: number; ay: number } | null;
+}
+
+export interface OverlapResult {
+  rapor: { yil: number | null; ay: number | null };
+  matrix: Record<string, Record<string, { pct: number; sharedCount: number }>>;
+  sharedHoldings: Array<{
+    ticker: string;
+    weights: Record<string, number>;
+    fundCount: number;
+  }>;
+}
+
+export interface HoldingsScreenerResult {
+  ticker: string;
+  rapor: { yil: number; ay: number } | null;
+  fonlar: Array<{
+    fon_kodu: string;
+    unvan: string;
+    portfoy_yonetim_sirketi: string | null;
+    agirlik: number;
+    getiri_1y: number | null;
+    risk_seviyesi: number | null;
+  }>;
+}
+
+export interface PortfolioExposure {
+  totalValue: number;
+  rapor: { yil: number | null; ay: number | null };
+  exposure: Array<{
+    ticker: string;
+    effectiveWeight: number;
+    effectiveTRY: number;
+    byFund: Record<string, { fundWeight: number; contribution: number }>;
+  }>;
+}
+
