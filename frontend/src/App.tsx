@@ -55,10 +55,21 @@ const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 const SELECTED_CODES_KEY = 'foncu_selectedCodes';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export' | 'ortusme'>('home');
+  // Read URL params on mount to support deep-linking into Örtüşme tab
+  const initialTab = (() => {
+    const p = new URLSearchParams(window.location.search).get('tab');
+    if (p === 'ortusme') return 'ortusme' as const;
+    return 'home' as const;
+  })();
+  const initialFunds = (() => {
+    const f = new URLSearchParams(window.location.search).get('funds');
+    return f ? f.split(',').slice(0, 5) : [];
+  })();
+
+  const [activeTab, setActiveTab] = useState<'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export' | 'ortusme'>(initialTab);
   const [profileDrawerCode, setProfileDrawerCode] = useState<string | null>(null);
   const [profileDrawerIndex, setProfileDrawerIndex] = useState(0);
-  const [overlapFunds, setOverlapFunds] = useState<string[]>([]);
+  const [overlapFunds, setOverlapFunds] = useState<string[]>(initialFunds);
   const [fundKind, setFundKind] = useState<FundKind>('YAT');
   const [pendingFundKind, setPendingFundKind] = useState<FundKind>('YAT');
   const [isNormalized, setIsNormalized] = useState(false);
