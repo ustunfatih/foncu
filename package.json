@@ -1,10 +1,19 @@
 {
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "cd frontend && npm install && npm run build",
+    "test": "jest --testPathPatterns='api/__tests__'",
+    "test:watch": "jest --watch --testPathPatterns='api/__tests__'"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {}
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0"
   }
 }
