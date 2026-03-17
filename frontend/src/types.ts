@@ -103,6 +103,8 @@ export interface MarketEvent {
   fundCode: string | null;
   title: string;
   description: string | null;
+  note: string | null;       // alias for description used in EventsPage
+  impact: string;            // 'high' | 'medium' | 'low' — from kap_events
   value: string | null;
   kapId: number | null;
 }

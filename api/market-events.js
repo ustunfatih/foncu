@@ -23,17 +23,24 @@ module.exports = async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    const events = (data || []).map(e => ({
-      id: e.id,
-      date: e.olay_tarihi,
-      type: e.olay_tipi,
-      ticker: e.hisse_kodu,
-      fundCode: e.fon_kodu,
-      title: e.baslik,
-      description: e.aciklama,
-      value: e.deger,
-      kapId: e.kap_bildirim_id,
-    }));
+    const events = (data || []).map(e => {
+      // Derive impact level from event type
+      const impactMap = { 'KAP': 'high', 'TEMETTÜ': 'high', 'SPK': 'medium', 'BIST': 'medium' };
+      const impact = impactMap[e.olay_tipi] ?? 'low';
+      return {
+        id: e.id,
+        date: e.olay_tarihi,
+        type: e.olay_tipi,
+        ticker: e.hisse_kodu,
+        fundCode: e.fon_kodu,
+        title: e.baslik,
+        description: e.aciklama,
+        note: e.aciklama,   // alias used by EventsPage
+        impact,             // 'high' | 'medium' | 'low'
+        value: e.deger,
+        kapId: e.kap_bildirim_id,
+      };
+    });
 
     return res.status(200).json({ events, count: events.length });
   } catch (err) {
