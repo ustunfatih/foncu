@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/sync-fintables",
+      "schedule": "0 23 * * *"
+    }
+  ],
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
   "devCommand": "cd frontend && npm run dev",
