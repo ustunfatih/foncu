@@ -1,128 +1,71 @@
 const supabase = require('./_lib/supabase');
-const { fetchFundHistoryBatch, normalizeCode } = require('./_lib/history');
-const { calculateRsi, calculateSmaTail } = require('./_lib/analytics');
 
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const MAX_CACHE_ENTRIES = 50;
-const cache = new Map();
+module.exports = async (req, res) => {
+  res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
 
-const getDateOffset = (days) => {
-  const end = new Date();
-  const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
-  return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
-  };
-};
-
-const detectSmaCross = (shortSma, longSma) => {
-  if (shortSma.length < 2 || longSma.length < 2) return false;
-  const shortPrev = shortSma[shortSma.length - 2].value;
-  const shortNow = shortSma[shortSma.length - 1].value;
-  const longPrev = longSma[longSma.length - 2].value;
-  const longNow = longSma[longSma.length - 1].value;
-  return shortPrev < longPrev && shortNow > longNow;
-};
-
-module.exports = async function handler(req, res) {
   try {
-    if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' });
+    const {
+      kind = 'YAT',
+      mode = 'rsi',         // 'rsi' | 'sma' | 'ma200'
+      rsiThreshold = 35,
+      limit = 50
+    } = req.query;
+
+    const kindMap = { YAT: 'mutual', EMK: 'pension', BYF: 'exchange' };
+    const fon_tipi = kindMap[kind.toUpperCase()] ?? 'mutual';
+
+    const baseSelect = [
+      'fon_kodu', 'unvan', 'portfoy_yonetim_sirketi',
+      'rsi_14', 'rsi_sinyal', 'sma_20', 'sma_50', 'sma_200',
+      'son_fiyat', 'ma200_ustu', 'sma_kesisim_20_50',
+      'getiri_1a', 'getiri_1y', 'risk_seviyesi'
+    ].join(', ');
+
+    let query = supabase
+      .from('fund_profiles')
+      .select(baseSelect)
+      .eq('fon_tipi', fon_tipi);
+
+    if (mode === 'rsi') {
+      query = query
+        .not('rsi_14', 'is', null)
+        .lte('rsi_14', Number(rsiThreshold))
+        .order('rsi_14', { ascending: true });
+    } else if (mode === 'sma') {
+      query = query
+        .eq('sma_kesisim_20_50', true)
+        .order('rsi_14', { ascending: true });
+    } else if (mode === 'ma200') {
+      query = query
+        .eq('ma200_ustu', true)
+        .not('sma_200', 'is', null)
+        .order('getiri_1y', { ascending: false });
     }
 
-    const kind = (req.query.kind || 'YAT').toString().toUpperCase();
-    const rsiBelow = Number(req.query.rsiBelow) || 30;
-    const shortPeriod = Number(req.query.shortPeriod) || 20;
-    const longPeriod = Number(req.query.longPeriod) || 50;
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const { start, end } = getDateOffset(365);
-    const cacheKey = JSON.stringify({ kind, rsiBelow, shortPeriod, longPeriod, limit, start, end });
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-      return res.status(200).json(cached.data);
-    }
+    query = query.limit(Number(limit));
+    const { data, error } = await query;
+    if (error) throw error;
 
-    const { data: funds, error } = await supabase
-      .from('funds')
-      .select('code,title,kind')
-      .eq('kind', kind)
-      .limit(limit);
+    const results = (data || []).map(f => ({
+      code: f.fon_kodu,
+      title: f.unvan,
+      manager: f.portfoy_yonetim_sirketi,
+      rsi: f.rsi_14,
+      rsiSignal: f.rsi_sinyal,
+      sma20: f.sma_20,
+      sma50: f.sma_50,
+      sma200: f.sma_200,
+      price: f.son_fiyat,
+      aboveMa200: f.ma200_ustu,
+      smaCrossover: f.sma_kesisim_20_50,
+      return1m: f.getiri_1a,
+      return1y: f.getiri_1y,
+      riskLevel: f.risk_seviyesi,
+    }));
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const codes = (funds || []).map((fund) => normalizeCode(fund.code)).filter(Boolean);
-    const historyByCode = await fetchFundHistoryBatch(codes, start, end);
-
-    const results = [];
-    const debug = {
-      fundsTotal: (funds || []).length,
-      historyFound: 0,
-      historyMissing: 0,
-      skippedShortHistory: 0,
-      skippedNoSignal: 0,
-      rsiHits: 0,
-      crossHits: 0,
-    };
-    for (const fund of funds || []) {
-      const history = historyByCode[normalizeCode(fund.code)] || [];
-      if (history.length === 0) {
-        debug.historyMissing += 1;
-        continue;
-      }
-      debug.historyFound += 1;
-      if (history.length < longPeriod + 2) {
-        debug.skippedShortHistory += 1;
-        continue;
-      }
-
-      const rsi = calculateRsi(history, 14);
-      const shortSma = calculateSmaTail(history, shortPeriod, 2);
-      const longSma = calculateSmaTail(history, longPeriod, 2);
-      const hasCross = detectSmaCross(shortSma, longSma);
-
-      if (rsi !== null && rsi <= rsiBelow) {
-        debug.rsiHits += 1;
-      }
-      if (hasCross) {
-        debug.crossHits += 1;
-      }
-
-      if ((rsi !== null && rsi <= rsiBelow) || hasCross) {
-        results.push({
-          code: fund.code,
-          title: fund.title,
-          kind: fund.kind,
-          rsi,
-          shortSma: shortSma[shortSma.length - 1]?.value || null,
-          longSma: longSma[longSma.length - 1]?.value || null,
-          smaCross: hasCross,
-        });
-      } else {
-        debug.skippedNoSignal += 1;
-      }
-    }
-
-    const payload = {
-      kind,
-      range: { start, end },
-      count: results.length,
-      results,
-      debug,
-    };
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      let oldestKey = null;
-      let oldestTime = Infinity;
-      for (const [key, entry] of cache) {
-        if (entry.at < oldestTime) { oldestTime = entry.at; oldestKey = key; }
-      }
-      if (oldestKey) cache.delete(oldestKey);
-    }
-    cache.set(cacheKey, { at: Date.now(), data: payload });
-    return res.status(200).json(payload);
-  } catch (error) {
-    console.error('[fund-technical-scan] failed', error);
-    return res.status(500).json({ error: 'Failed to scan funds' });
+    return res.status(200).json({ results, mode, total: results.length });
+  } catch (err) {
+    console.error('[fund-technical-scan] Error:', err);
+    return res.status(500).json({ error: err.message });
   }
 };
