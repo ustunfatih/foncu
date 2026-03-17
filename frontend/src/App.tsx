@@ -9,6 +9,8 @@ import BenchmarkPage from './pages/BenchmarkPage';
 import MacroPage from './pages/MacroPage';
 import TechnicalScannerPage from './pages/TechnicalScannerPage';
 import EventsPage from './pages/EventsPage';
+import OrtusmeTab from './pages/OrtusmeTab';
+import { FundProfileDrawer } from './components/FundProfileDrawer';
 import { ChartSkeleton, FundCardSkeleton } from './components/LoadingSkeleton';
 import { fetchFundDetails, fetchFunds } from './api';
 import { FundKind, FundOverview, FundSummary, HistoricalPoint } from './types';
@@ -53,7 +55,10 @@ const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 const SELECTED_CODES_KEY = 'foncu_selectedCodes';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export' | 'ortusme'>('home');
+  const [profileDrawerCode, setProfileDrawerCode] = useState<string | null>(null);
+  const [profileDrawerIndex, setProfileDrawerIndex] = useState(0);
+  const [overlapFunds, setOverlapFunds] = useState<string[]>([]);
   const [fundKind, setFundKind] = useState<FundKind>('YAT');
   const [pendingFundKind, setPendingFundKind] = useState<FundKind>('YAT');
   const [isNormalized, setIsNormalized] = useState(false);
@@ -375,6 +380,12 @@ const App = () => {
         >
           Export
         </button>
+        <button
+          className={`tab ${activeTab === 'ortusme' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ortusme')}
+        >
+          Örtüşme ✦
+        </button>
       </div>
 
       {/* Conditional Page Rendering */}
@@ -385,6 +396,7 @@ const App = () => {
       {activeTab === 'macro' && <MacroPage />}
       {activeTab === 'technical' && <TechnicalScannerPage />}
       {activeTab === 'events' && <EventsPage />}
+      {activeTab === 'ortusme' && <OrtusmeTab initialFunds={overlapFunds} />}
 
       {activeTab === 'home' && (
         <>
@@ -440,7 +452,10 @@ const App = () => {
                 </>
               ) : (
                 selectedFunds.map((fund, index) => (
-                  <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
+                  <div key={fund.code} style={{ cursor: 'pointer' }}
+                    onClick={() => { setProfileDrawerCode(fund.code); setProfileDrawerIndex(index); }}>
+                    <FundCard fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
+                  </div>
                 ))
               )}
             </div>
@@ -563,6 +578,17 @@ const App = () => {
           )}
         </>
       )}
+
+      <FundProfileDrawer
+        fundCode={profileDrawerCode}
+        fundIndex={profileDrawerIndex}
+        onClose={() => setProfileDrawerCode(null)}
+        onAddToOverlap={(code) => {
+          setOverlapFunds(prev => prev.includes(code) ? prev : [...prev, code].slice(0, 5));
+          setProfileDrawerCode(null);
+          setActiveTab('ortusme');
+        }}
+      />
     </div>
   );
 };
