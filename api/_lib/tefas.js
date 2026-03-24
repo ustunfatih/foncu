@@ -76,6 +76,10 @@ const fetchInfo = async ({ start, end, code = '', kind = 'YAT', cookie }) =>
 const fetchAllocation = async ({ start, end, code = '', kind = 'YAT', cookie }) =>
   doPost(DETAIL_ENDPOINT, { fontip: kind, bastarih: start, bittarih: end, fonkod: code.toUpperCase() }, cookie);
 
+// Returns all funds of a given type with pre-computed return metrics (no date params needed)
+const fetchFundReturns = async ({ kind = 'YAT', cookie }) =>
+  doPost('/api/DB/BindFundReturn', { fontip: kind }, cookie);
+
 module.exports = {
   ROOT_URL,
   DETAIL_ENDPOINT,
@@ -86,4 +90,5 @@ module.exports = {
   bootstrapSession,
   fetchInfo,
   fetchAllocation,
+  fetchFundReturns,
 };
