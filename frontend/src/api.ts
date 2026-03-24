@@ -120,7 +120,7 @@ export const fetchFundScreen = async (filters: {
 
 export const fetchPortfolioValuation = async (holdings: PortfolioHoldingInput[]): Promise<PortfolioValuation> => {
   const apiBase = getApiBase();
-  return fetchWithTimeout<PortfolioValuation>(`${apiBase}/api/portfolio-valuation`, {
+  return fetchWithTimeout<PortfolioValuation>(`${apiBase}/api/portfolio?type=valuation`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ holdings }),
@@ -188,7 +188,7 @@ export const fetchPortfolioExposure = async (
   holdings: Array<{ fundCode: string; shares: number; currentValue: number }>
 ): Promise<PortfolioExposure> => {
   const apiBase = getApiBase();
-  return fetchWithTimeout<PortfolioExposure>(`${apiBase}/api/portfolio-exposure`, {
+  return fetchWithTimeout<PortfolioExposure>(`${apiBase}/api/portfolio?type=exposure`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ holdings }),
