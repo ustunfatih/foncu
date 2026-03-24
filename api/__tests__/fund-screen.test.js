@@ -4,6 +4,11 @@ jest.mock('../_lib/cache', () => ({
   getOrSetCache: jest.fn(async (_key, _ttl, loader) => ({ value: await loader(), cached: false })),
 }));
 
+const hydrateFundMetricRows = jest.fn(async (rows) => rows);
+jest.mock('../_lib/providers/fund-metrics-provider', () => ({
+  hydrateFundMetricRows: (...args) => hydrateFundMetricRows(...args),
+}));
+
 const queryState = { calls: [] };
 
 function createQueryMock(responseRows) {
@@ -64,6 +69,8 @@ function createRes() {
 beforeEach(() => {
   queryState.calls = [];
   fromMock.mockReset();
+  hydrateFundMetricRows.mockReset();
+  hydrateFundMetricRows.mockImplementation(async (rows) => rows);
 });
 
 test('returns screener results with meta data', async () => {
@@ -86,15 +93,48 @@ test('returns screener results with meta data', async () => {
     cached: false,
     source: 'fund_profiles',
     refreshedAt: '2026-03-24T10:00:00.000Z',
-    warnings: ['Filtered queries exclude funds whose requested metric is unavailable.'],
+    warnings: ['Missing return fields are backfilled from historical NAV data when available.'],
   });
 });
 
-test('adds explicit null exclusion for YTD and 1Y filters', async () => {
-  fromMock.mockReturnValue(createQueryMock([]));
+test('applies 3A, 6A, YTD, and 1Y filters after hydrating metric gaps', async () => {
+  fromMock.mockReturnValue(createQueryMock([
+    {
+      fon_kodu: 'AAA',
+      fon_kategorisi: 'Hisse',
+      guncelleme_zamani: '2026-03-24T10:00:00.000Z',
+    },
+    {
+      fon_kodu: 'BBB',
+      fon_kategorisi: 'Hisse',
+      guncelleme_zamani: '2026-03-24T09:00:00.000Z',
+    },
+  ]));
+  hydrateFundMetricRows.mockResolvedValue([
+    {
+      fon_kodu: 'AAA',
+      fon_kategorisi: 'Hisse',
+      getiri_3a: 12,
+      getiri_6a: 24,
+      getiri_ytd: 8,
+      getiri_1y: 30,
+      guncelleme_zamani: '2026-03-24T10:00:00.000Z',
+    },
+    {
+      fon_kodu: 'BBB',
+      fon_kategorisi: 'Hisse',
+      getiri_3a: 4,
+      getiri_6a: 9,
+      getiri_ytd: 2,
+      getiri_1y: 7,
+      guncelleme_zamani: '2026-03-24T09:00:00.000Z',
+    },
+  ]);
 
   const req = {
     query: {
+      minGetiri3a: '5',
+      minGetiri6a: '10',
       minGetiriYtd: '5',
       minGetiri1y: '10',
       fonKategorisi: 'Hisse',
@@ -107,10 +147,15 @@ test('adds explicit null exclusion for YTD and 1Y filters', async () => {
   expect(queryState.calls).toEqual(
     expect.arrayContaining([
       ['ilike', 'fon_kategorisi', '%Hisse%'],
-      ['not', 'getiri_ytd', 'is', null],
+    ])
+  );
+  expect(queryState.calls).not.toEqual(
+    expect.arrayContaining([
+      ['gte', 'getiri_3a', 5],
+      ['gte', 'getiri_6a', 10],
       ['gte', 'getiri_ytd', 5],
-      ['not', 'getiri_1y', 'is', null],
       ['gte', 'getiri_1y', 10],
     ])
   );
+  expect(res.payload.results.map((row) => row.fon_kodu)).toEqual(['AAA']);
 });
