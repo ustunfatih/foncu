@@ -46,14 +46,27 @@ export interface FundRiskResponse {
 }
 
 export interface FundScreenResult {
-  code: string;
-  title: string;
-  kind: FundKind;
-  return1m: number | null;
-  return1y: number | null;
-  sharpe: number | null;
-  volatility: number | null;
-  maxDrawdown: number | null;
+  fon_kodu: string;
+  unvan: string;
+  portfoy_yonetim_sirketi: string | null;
+  fon_tipi: string;
+  fon_kategorisi: string | null;
+  risk_seviyesi: number | null;
+  getiri_1g: number | null;
+  getiri_1h: number | null;
+  getiri_1a: number | null;
+  getiri_3a: number | null;
+  getiri_6a: number | null;
+  getiri_ytd: number | null;
+  getiri_1y: number | null;
+  yonetim_ucreti: number | null;
+  stopaj: number | null;
+  rsi_14: number | null;
+  rsi_sinyal: string | null;
+  sma_50: number | null;
+  sma_200: number | null;
+  sma_kesisim_20_50: boolean | null;
+  ma200_ustu: boolean | null;
 }
 
 export interface PortfolioHoldingInput {

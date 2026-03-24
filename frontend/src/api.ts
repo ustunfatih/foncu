@@ -88,12 +88,32 @@ export const fetchFundRisk = async (code: string, days = 365): Promise<FundRiskR
   return fetchWithTimeout<FundRiskResponse>(url.toString());
 };
 
-export const fetchFundScreen = async (kind: FundKind, minReturn1y?: number, minReturn1m?: number) => {
+export const fetchFundScreen = async (filters: {
+  fonTipi?: string;
+  fonKategorisi?: string;
+  minRisk?: number;
+  maxRisk?: number;
+  minGetiri1g?: number;
+  minGetiri1a?: number;
+  minGetiriYtd?: number;
+  minGetiri1y?: number;
+  stopaj?: number;
+  rsiSinyal?: string;
+  limit?: number;
+} = {}): Promise<FundScreenResult[]> => {
   const apiBase = getApiBase();
   const url = new URL(`${apiBase}/api/fund-screen`);
-  url.searchParams.append('kind', kind);
-  if (minReturn1y !== undefined) url.searchParams.append('minReturn1y', String(minReturn1y));
-  if (minReturn1m !== undefined) url.searchParams.append('minReturn1m', String(minReturn1m));
+  if (filters.fonTipi) url.searchParams.append('fonTipi', filters.fonTipi);
+  if (filters.fonKategorisi) url.searchParams.append('fonKategorisi', filters.fonKategorisi);
+  if (filters.minRisk !== undefined) url.searchParams.append('minRisk', String(filters.minRisk));
+  if (filters.maxRisk !== undefined) url.searchParams.append('maxRisk', String(filters.maxRisk));
+  if (filters.minGetiri1g !== undefined) url.searchParams.append('minGetiri1g', String(filters.minGetiri1g));
+  if (filters.minGetiri1a !== undefined) url.searchParams.append('minGetiri1a', String(filters.minGetiri1a));
+  if (filters.minGetiriYtd !== undefined) url.searchParams.append('minGetiriYtd', String(filters.minGetiriYtd));
+  if (filters.minGetiri1y !== undefined) url.searchParams.append('minGetiri1y', String(filters.minGetiri1y));
+  if (filters.stopaj !== undefined) url.searchParams.append('stopaj', String(filters.stopaj));
+  if (filters.rsiSinyal) url.searchParams.append('rsiSinyal', filters.rsiSinyal);
+  if (filters.limit !== undefined) url.searchParams.append('limit', String(filters.limit));
   const payload = await fetchWithTimeout<{ results: FundScreenResult[] }>(url.toString());
   return payload.results;
 };

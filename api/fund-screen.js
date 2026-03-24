@@ -5,54 +5,74 @@ module.exports = async (req, res) => {
 
   try {
     const {
-      kind = 'YAT',
-      minReturn1y = 0,
-      minReturn1m,
-      limit = 50
+      fonTipi,
+      fonKategorisi,
+      minRisk,
+      maxRisk,
+      minGetiri1g,
+      minGetiri1a,
+      minGetiriYtd,
+      minGetiri1y,
+      stopaj,
+      rsiSinyal,
+      limit = 100,
     } = req.query;
-
-    const kindMap = { YAT: 'mutual', EMK: 'pension', BYF: 'exchange' };
-    const fon_tipi = kindMap[kind.toUpperCase()] ?? 'mutual';
 
     let query = supabase
       .from('fund_profiles')
       .select([
-        'fon_kodu', 'unvan', 'fon_tipi', 'risk_seviyesi',
-        'portfoy_yonetim_sirketi', 'fon_kategorisi',
-        'getiri_1y', 'getiri_1a', 'getiri_3a',
-        'fon_buyuklugu', 'yatirimci_sayisi',
-        'stopaj', 'yonetim_ucreti'
+        'fon_kodu', 'unvan', 'portfoy_yonetim_sirketi', 'fon_tipi', 'fon_kategorisi',
+        'risk_seviyesi', 'getiri_1g', 'getiri_1h', 'getiri_1a', 'getiri_3a',
+        'getiri_6a', 'getiri_ytd', 'getiri_1y', 'yonetim_ucreti', 'stopaj',
+        'rsi_14', 'rsi_sinyal', 'sma_50', 'sma_200', 'sma_kesisim_20_50', 'ma200_ustu',
       ].join(', '))
-      .eq('fon_tipi', fon_tipi)
-      .gte('getiri_1y', Number(minReturn1y))
-      .not('getiri_1y', 'is', null)
       .order('getiri_1y', { ascending: false })
       .limit(Number(limit));
 
-    if (minReturn1m !== undefined) {
-      query = query.gte('getiri_1a', Number(minReturn1m));
+    if (fonTipi) {
+      query = query.eq('fon_tipi', fonTipi);
+    }
+
+    if (fonKategorisi) {
+      query = query.eq('fon_kategorisi', fonKategorisi);
+    }
+
+    if (minRisk !== undefined) {
+      query = query.gte('risk_seviyesi', Number(minRisk));
+    }
+
+    if (maxRisk !== undefined) {
+      query = query.lte('risk_seviyesi', Number(maxRisk));
+    }
+
+    if (minGetiri1g !== undefined) {
+      query = query.gte('getiri_1g', Number(minGetiri1g));
+    }
+
+    if (minGetiri1a !== undefined) {
+      query = query.gte('getiri_1a', Number(minGetiri1a));
+    }
+
+    if (minGetiriYtd !== undefined) {
+      query = query.gte('getiri_ytd', Number(minGetiriYtd));
+    }
+
+    if (minGetiri1y !== undefined) {
+      query = query.gte('getiri_1y', Number(minGetiri1y));
+    }
+
+    if (stopaj !== undefined) {
+      query = query.eq('stopaj', Number(stopaj));
+    }
+
+    if (rsiSinyal) {
+      query = query.eq('rsi_sinyal', rsiSinyal);
     }
 
     const { data, error } = await query;
     if (error) throw error;
 
-    const results = (data || []).map(f => ({
-      code: f.fon_kodu,
-      title: f.unvan,
-      kind: kind.toUpperCase(),
-      return1y: f.getiri_1y,
-      return1m: f.getiri_1a,
-      return3m: f.getiri_3a,
-      aum: f.fon_buyuklugu,
-      investors: f.yatirimci_sayisi,
-      riskLevel: f.risk_seviyesi,
-      manager: f.portfoy_yonetim_sirketi,
-      category: f.fon_kategorisi,
-      stopaj: f.stopaj,
-      managementFee: f.yonetim_ucreti,
-    }));
-
-    return res.status(200).json({ results, total: results.length });
+    return res.status(200).json({ results: data || [], total: (data || []).length });
   } catch (err) {
     console.error('[fund-screen] Error:', err);
     return res.status(500).json({ error: err.message });
