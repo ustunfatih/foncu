@@ -2,6 +2,25 @@ const { fintablesQuery } = require('./_lib/fintables');
 const { upsertRows, computeRsi14, computeSma, rsiToSignal } = require('./_lib/sync-helpers');
 const supabase = require('./_lib/supabase');
 
+function computeReturn(entries, offsetDays) {
+  if (!entries || entries.length < offsetDays + 1) return null;
+  const latest = entries[entries.length - 1].price;
+  const past = entries[Math.max(0, entries.length - 1 - offsetDays)].price;
+  if (!past || past === 0) return null;
+  return parseFloat(((latest / past - 1) * 100).toFixed(4));
+}
+
+function computeYtdReturn(entries) {
+  if (!entries || entries.length < 2) return null;
+  const latest = entries[entries.length - 1];
+  const currentYear = new Date().getFullYear();
+  const prevYear = entries.filter(e => new Date(e.date).getFullYear() < currentYear);
+  if (prevYear.length === 0) return null;
+  const base = prevYear[prevYear.length - 1].price;
+  if (!base || base === 0) return null;
+  return parseFloat(((latest.price / base - 1) * 100).toFixed(4));
+}
+
 const CRON_SECRET = process.env.CRON_SECRET;
 
 module.exports = async (req, res) => {
@@ -108,15 +127,16 @@ module.exports = async (req, res) => {
       ORDER BY fon_kodu, tarih_europe_istanbul ASC
     `, 'syncing OHLCV for technicals');
 
-    // Group prices by fund
+    // Group prices by fund (store date+price for return calculations)
     const pricesByFund = {};
     for (const row of ohlcvRows) {
       if (!pricesByFund[row.fon_kodu]) pricesByFund[row.fon_kodu] = [];
-      if (row.fiyat != null) pricesByFund[row.fon_kodu].push(row.fiyat);
+      if (row.fiyat != null) pricesByFund[row.fon_kodu].push({ date: row.tarih, price: row.fiyat });
     }
 
     // Compute and update indicators per fund in batches
-    const indicatorUpdates = Object.entries(pricesByFund).map(([fon_kodu, prices]) => {
+    const indicatorUpdates = Object.entries(pricesByFund).map(([fon_kodu, entries]) => {
+      const prices = entries.map(e => e.price);
       const sma20 = computeSma(prices, 20);
       const sma50 = computeSma(prices, 50);
       const sma200 = computeSma(prices, 200);
@@ -143,6 +163,13 @@ module.exports = async (req, res) => {
         ma200_ustu: sma200 !== null && sonFiyat !== null ? sonFiyat > sma200 : null,
         sma_kesisim_20_50: smaCrossover,
         rsi_sinyal: rsiToSignal(rsi14),
+        getiri_1g:  computeReturn(entries, 1),
+        getiri_1h:  computeReturn(entries, 5),
+        getiri_1a:  computeReturn(entries, 21),
+        getiri_3a:  computeReturn(entries, 63),
+        getiri_6a:  computeReturn(entries, 126),
+        getiri_ytd: computeYtdReturn(entries),
+        getiri_1y:  computeReturn(entries, 252),
       };
     });
 
