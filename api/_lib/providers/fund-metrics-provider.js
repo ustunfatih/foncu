@@ -24,7 +24,7 @@ async function loadProfilesForMetricRefresh(profiles) {
 
   const { data, error } = await supabase
     .from('fund_profiles')
-    .select('fon_kodu')
+    .select('*')
     .order('fon_kodu', { ascending: true });
 
   if (error) throw new Error(`Failed to read fund_profiles for metric refresh: ${error.message}`);
@@ -105,24 +105,26 @@ async function syncFundMetrics(profiles, log, options = {}) {
   const profilesToRefresh = await loadProfilesForMetricRefresh(profiles);
   const cutoff = new Date(asOf);
   cutoff.setDate(cutoff.getDate() - 420);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const startDate = cutoff.toISOString().split('T')[0];
+  const endDate = asOf.toISOString().split('T')[0];
+  const historyBatchSize = options.historyBatchSize || 200;
 
   log.push('Reading NAV history from historical_data for screener metrics...');
 
-  const { data: navRows, error } = await supabase
-    .from('historical_data')
-    .select('fund_code, date, price')
-    .gte('date', cutoffStr)
-    .order('fund_code', { ascending: true })
-    .order('date', { ascending: true });
+  const historyByFund = {};
+  for (let index = 0; index < profilesToRefresh.length; index += historyBatchSize) {
+    const batchCodes = profilesToRefresh
+      .slice(index, index + historyBatchSize)
+      .map((profile) => profile.fon_kodu)
+      .filter(Boolean);
+    const batchHistory = await fetchFundHistoryBatch(batchCodes, startDate, endDate);
+    Object.assign(historyByFund, batchHistory);
+  }
 
-  if (error) throw new Error(`Failed to read historical_data: ${error.message}`);
-
-  const historyByFund = groupHistoryByFund(navRows);
   const metricRows = profilesToRefresh.map((profile) => {
     const snapshot = buildMetricSnapshot(historyByFund[profile.fon_kodu] || [], asOf);
     return {
-      fon_kodu: profile.fon_kodu,
+      ...profile,
       son_fiyat: snapshot.son_fiyat,
       getiri_1g: snapshot.getiri_1g,
       getiri_1h: snapshot.getiri_1h,

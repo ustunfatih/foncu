@@ -1,22 +1,45 @@
 const supabase = require('./supabase');
 
 const normalizeCode = (code) => (code || '').toString().trim().toUpperCase();
+const HISTORY_PAGE_SIZE = 1000;
+
+async function fetchPagedRows(buildQuery, options = {}) {
+  const pageSize = options.pageSize || HISTORY_PAGE_SIZE;
+  const rows = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const page = data || [];
+    rows.push(...page);
+
+    if (page.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return rows;
+}
 
 const fetchFundHistory = async (code, startDate, endDate) => {
   if (!supabase) return [];
   const normalizedCode = normalizeCode(code);
   if (!normalizedCode) return [];
-  const { data, error } = await supabase
-    .from('historical_data')
-    .select('date, price')
-    .eq('fund_code', normalizedCode)
-    .gte('date', startDate)
-    .lte('date', endDate)
-    .order('date', { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  const data = await fetchPagedRows(() => (
+    supabase
+      .from('historical_data')
+      .select('date, price')
+      .eq('fund_code', normalizedCode)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+  ));
 
   return (data || []).map((row) => ({
     date: row.date,
@@ -31,18 +54,16 @@ const fetchFundHistoryBatch = async (codes, startDate, endDate) => {
     .filter((code, index, array) => code && array.indexOf(code) === index);
   if (normalizedCodes.length === 0) return {};
 
-  const { data, error } = await supabase
-    .from('historical_data')
-    .select('fund_code, date, price')
-    .in('fund_code', normalizedCodes)
-    .gte('date', startDate)
-    .lte('date', endDate)
-    .order('fund_code', { ascending: true })
-    .order('date', { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  const data = await fetchPagedRows(() => (
+    supabase
+      .from('historical_data')
+      .select('fund_code, date, price')
+      .in('fund_code', normalizedCodes)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('fund_code', { ascending: true })
+      .order('date', { ascending: true })
+  ));
 
   const grouped = {};
   for (const row of data || []) {
@@ -96,16 +117,14 @@ const fetchLatestPriceBatch = async (codes) => {
   oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
   const startDate = oneMonthAgo.toISOString().split('T')[0];
 
-  const { data, error } = await supabase
-    .from('historical_data')
-    .select('fund_code, date, price')
-    .in('fund_code', normalizedCodes)
-    .gte('date', startDate)
-    .order('date', { ascending: false });
-
-  if (error) {
-    throw new Error(error.message);
-  }
+  const data = await fetchPagedRows(() => (
+    supabase
+      .from('historical_data')
+      .select('fund_code, date, price')
+      .in('fund_code', normalizedCodes)
+      .gte('date', startDate)
+      .order('date', { ascending: false })
+  ));
 
   const latestPrices = {};
   for (const row of data || []) {
@@ -124,6 +143,7 @@ const fetchLatestPriceBatch = async (codes) => {
 module.exports = {
   fetchFundHistory,
   fetchFundHistoryBatch,
+  fetchPagedRows,
   fetchLatestPrice,
   fetchLatestPriceBatch,
   normalizeCode,
