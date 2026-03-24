@@ -1,5 +1,6 @@
 const { syncFundProfiles, syncFundAllocations } = require('./_lib/providers/fund-profiles-provider');
 const { syncFundMetrics } = require('./_lib/providers/fund-metrics-provider');
+const { backfillMissingMetricHistory } = require('./_lib/providers/fund-history-provider');
 const { syncFundHoldings, syncKapEvents } = require('./_lib/providers/fund-holdings-provider');
 const { invalidateCacheByPrefix } = require('./_lib/cache');
 
@@ -13,6 +14,8 @@ module.exports = async (req, res) => {
   }
 
   const phase = (req.query.phase || 'all').toString().toLowerCase();
+  const shouldBackfillMissingHistory =
+    req.query.backfillMissingHistory === '1' || req.query.backfillMissingHistory === 'true';
   const log = [];
   const startedAt = Date.now();
 
@@ -33,6 +36,12 @@ module.exports = async (req, res) => {
         fundsWith1H: 0,
         fundsMissingHistory: 0,
       },
+      historyBackfill: {
+        candidateCount: 0,
+        backfilledFundCount: 0,
+        insertedHistoryRowCount: 0,
+        skippedFundCount: 0,
+      },
     };
 
     const shouldRunProfiles = phase === 'all' || phase === 'profiles';
@@ -52,6 +61,9 @@ module.exports = async (req, res) => {
     }
 
     if (shouldRunMetrics) {
+      if (shouldBackfillMissingHistory) {
+        summary.historyBackfill = await backfillMissingMetricHistory(profiles, log);
+      }
       const metricResult = await syncFundMetrics(profiles, log);
       summary.metricCount = metricResult.metricCount;
       summary.coverage = metricResult.coverage;

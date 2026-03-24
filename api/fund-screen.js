@@ -1,5 +1,12 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
+const { hydrateFundMetricRows } = require('./_lib/providers/fund-metrics-provider');
+
+function applyMinReturnFilter(rows, key, threshold) {
+  if (threshold === undefined) return rows;
+  const minValue = Number(threshold);
+  return rows.filter((row) => row[key] != null && row[key] >= minValue);
+}
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
@@ -12,6 +19,8 @@ module.exports = async (req, res) => {
       maxRisk,
       minGetiri1g,
       minGetiri1a,
+      minGetiri3a,
+      minGetiri6a,
       minGetiriYtd,
       minGetiri1y,
       stopaj,
@@ -26,6 +35,8 @@ module.exports = async (req, res) => {
       maxRisk,
       minGetiri1g,
       minGetiri1a,
+      minGetiri3a,
+      minGetiri6a,
       minGetiriYtd,
       minGetiri1y,
       stopaj,
@@ -34,6 +45,8 @@ module.exports = async (req, res) => {
     });
 
     const { value, cached } = await getOrSetCache(cacheKey, TTL.FUND_SCREEN, async () => {
+      const requestedLimit = Number(limit) || 1000;
+      const sourceLimit = Math.max(requestedLimit, 1000);
       let query = supabase
         .from('fund_profiles')
         .select([
@@ -44,7 +57,7 @@ module.exports = async (req, res) => {
           'guncelleme_zamani',
         ].join(', '))
         .order('getiri_1y', { ascending: false })
-        .limit(Number(limit));
+        .limit(sourceLimit);
 
       if (fonTipi) {
         query = query.eq('fon_tipi', fonTipi);
@@ -62,22 +75,6 @@ module.exports = async (req, res) => {
         query = query.lte('risk_seviyesi', Number(maxRisk));
       }
 
-      if (minGetiri1g !== undefined) {
-        query = query.not('getiri_1g', 'is', null).gte('getiri_1g', Number(minGetiri1g));
-      }
-
-      if (minGetiri1a !== undefined) {
-        query = query.not('getiri_1a', 'is', null).gte('getiri_1a', Number(minGetiri1a));
-      }
-
-      if (minGetiriYtd !== undefined) {
-        query = query.not('getiri_ytd', 'is', null).gte('getiri_ytd', Number(minGetiriYtd));
-      }
-
-      if (minGetiri1y !== undefined) {
-        query = query.not('getiri_1y', 'is', null).gte('getiri_1y', Number(minGetiri1y));
-      }
-
       if (stopaj !== undefined) {
         query = query.eq('stopaj', Number(stopaj));
       }
@@ -89,7 +86,18 @@ module.exports = async (req, res) => {
       const { data, error } = await query;
       if (error) throw error;
 
-      const results = data || [];
+      let results = await hydrateFundMetricRows(data || []);
+      results = applyMinReturnFilter(results, 'getiri_1g', minGetiri1g);
+      results = applyMinReturnFilter(results, 'getiri_1a', minGetiri1a);
+      results = applyMinReturnFilter(results, 'getiri_3a', minGetiri3a);
+      results = applyMinReturnFilter(results, 'getiri_6a', minGetiri6a);
+      results = applyMinReturnFilter(results, 'getiri_ytd', minGetiriYtd);
+      results = applyMinReturnFilter(results, 'getiri_1y', minGetiri1y);
+      results = results
+        .slice()
+        .sort((a, b) => (b.getiri_1y ?? Number.NEGATIVE_INFINITY) - (a.getiri_1y ?? Number.NEGATIVE_INFINITY))
+        .slice(0, requestedLimit);
+
       const refreshedAt = results
         .map((row) => row.guncelleme_zamani)
         .filter(Boolean)
@@ -107,7 +115,7 @@ module.exports = async (req, res) => {
         source: 'fund_profiles',
         refreshedAt: value.refreshedAt,
         warnings: [
-          'Filtered queries exclude funds whose requested metric is unavailable.',
+          'Missing return fields are backfilled from historical NAV data when available.',
         ],
       },
     });

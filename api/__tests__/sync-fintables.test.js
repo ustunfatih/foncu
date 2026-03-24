@@ -3,6 +3,7 @@ process.env.CRON_SECRET = 'test-secret';
 const syncFundProfiles = jest.fn();
 const syncFundAllocations = jest.fn();
 const syncFundMetrics = jest.fn();
+const backfillMissingMetricHistory = jest.fn();
 const syncFundHoldings = jest.fn();
 const syncKapEvents = jest.fn();
 const invalidateCacheByPrefix = jest.fn();
@@ -14,6 +15,10 @@ jest.mock('../_lib/providers/fund-profiles-provider', () => ({
 
 jest.mock('../_lib/providers/fund-metrics-provider', () => ({
   syncFundMetrics: (...args) => syncFundMetrics(...args),
+}));
+
+jest.mock('../_lib/providers/fund-history-provider', () => ({
+  backfillMissingMetricHistory: (...args) => backfillMissingMetricHistory(...args),
 }));
 
 jest.mock('../_lib/providers/fund-holdings-provider', () => ({
@@ -59,6 +64,12 @@ beforeEach(() => {
       fundsMissingHistory: 0,
     },
   });
+  backfillMissingMetricHistory.mockResolvedValue({
+    candidateCount: 1,
+    backfilledFundCount: 1,
+    insertedHistoryRowCount: 252,
+    skippedFundCount: 0,
+  });
   syncFundHoldings.mockResolvedValue({ holdingCount: 2 });
   syncKapEvents.mockResolvedValue({ kapEventCount: 3 });
 });
@@ -86,10 +97,34 @@ test('supports metrics-only backfill mode', async () => {
 
   expect(syncFundProfiles).not.toHaveBeenCalled();
   expect(syncFundAllocations).not.toHaveBeenCalled();
+  expect(backfillMissingMetricHistory).not.toHaveBeenCalled();
   expect(syncFundMetrics).toHaveBeenCalled();
   expect(syncFundHoldings).not.toHaveBeenCalled();
   expect(syncKapEvents).not.toHaveBeenCalled();
   expect(res.payload.log).toContain('Manual metrics-only refresh can be used as a backfill for existing funds.');
+});
+
+test('can backfill missing historical data before metrics refresh', async () => {
+  const req = {
+    headers: {},
+    query: {
+      secret: 'test-secret',
+      phase: 'metrics',
+      backfillMissingHistory: '1',
+    },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  expect(backfillMissingMetricHistory).toHaveBeenCalledWith([], expect.any(Array));
+  expect(syncFundMetrics).toHaveBeenCalled();
+  expect(res.payload.summary.historyBackfill).toEqual({
+    candidateCount: 1,
+    backfilledFundCount: 1,
+    insertedHistoryRowCount: 252,
+    skippedFundCount: 0,
+  });
 });
 
 test('invalidates cached read models after a sync', async () => {

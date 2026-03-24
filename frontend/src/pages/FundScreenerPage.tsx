@@ -50,6 +50,8 @@ const FundScreenerPage = () => {
   const [maxRisk, setMaxRisk] = useState('');
   const [minGetiri1g, setMinGetiri1g] = useState('');
   const [minGetiri1a, setMinGetiri1a] = useState('');
+  const [minGetiri3a, setMinGetiri3a] = useState('');
+  const [minGetiri6a, setMinGetiri6a] = useState('');
   const [minGetiriYtd, setMinGetiriYtd] = useState('');
   const [minGetiri1y, setMinGetiri1y] = useState('');
   const [stopaj, setStopaj] = useState('');
@@ -78,6 +80,8 @@ const FundScreenerPage = () => {
         maxRisk: maxRisk !== '' ? Number(maxRisk) : undefined,
         minGetiri1g: minGetiri1g !== '' ? Number(minGetiri1g) : undefined,
         minGetiri1a: minGetiri1a !== '' ? Number(minGetiri1a) : undefined,
+        minGetiri3a: minGetiri3a !== '' ? Number(minGetiri3a) : undefined,
+        minGetiri6a: minGetiri6a !== '' ? Number(minGetiri6a) : undefined,
         minGetiriYtd: minGetiriYtd !== '' ? Number(minGetiriYtd) : undefined,
         minGetiri1y: minGetiri1y !== '' ? Number(minGetiri1y) : undefined,
         stopaj: stopaj !== '' ? Number(stopaj) : undefined,
@@ -99,6 +103,8 @@ const FundScreenerPage = () => {
     setMaxRisk('');
     setMinGetiri1g('');
     setMinGetiri1a('');
+    setMinGetiri3a('');
+    setMinGetiri6a('');
     setMinGetiriYtd('');
     setMinGetiri1y('');
     setStopaj('');
@@ -213,6 +219,18 @@ const FundScreenerPage = () => {
                 Min 1A Getiri (%)
                 <input style={inputStyle} type="number" placeholder="0"
                   value={minGetiri1a} onChange={e => setMinGetiri1a(e.target.value)} />
+              </label>
+
+              <label style={labelStyle}>
+                Min 3A Getiri (%)
+                <input style={inputStyle} type="number" placeholder="0"
+                  value={minGetiri3a} onChange={e => setMinGetiri3a(e.target.value)} />
+              </label>
+
+              <label style={labelStyle}>
+                Min 6A Getiri (%)
+                <input style={inputStyle} type="number" placeholder="0"
+                  value={minGetiri6a} onChange={e => setMinGetiri6a(e.target.value)} />
               </label>
 
               <label style={labelStyle}>

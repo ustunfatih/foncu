@@ -95,6 +95,8 @@ export const fetchFundScreen = async (filters: {
   maxRisk?: number;
   minGetiri1g?: number;
   minGetiri1a?: number;
+  minGetiri3a?: number;
+  minGetiri6a?: number;
   minGetiriYtd?: number;
   minGetiri1y?: number;
   stopaj?: number;
@@ -109,6 +111,8 @@ export const fetchFundScreen = async (filters: {
   if (filters.maxRisk !== undefined) url.searchParams.append('maxRisk', String(filters.maxRisk));
   if (filters.minGetiri1g !== undefined) url.searchParams.append('minGetiri1g', String(filters.minGetiri1g));
   if (filters.minGetiri1a !== undefined) url.searchParams.append('minGetiri1a', String(filters.minGetiri1a));
+  if (filters.minGetiri3a !== undefined) url.searchParams.append('minGetiri3a', String(filters.minGetiri3a));
+  if (filters.minGetiri6a !== undefined) url.searchParams.append('minGetiri6a', String(filters.minGetiri6a));
   if (filters.minGetiriYtd !== undefined) url.searchParams.append('minGetiriYtd', String(filters.minGetiriYtd));
   if (filters.minGetiri1y !== undefined) url.searchParams.append('minGetiri1y', String(filters.minGetiri1y));
   if (filters.stopaj !== undefined) url.searchParams.append('stopaj', String(filters.stopaj));
