@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
       minGetiri1y,
       stopaj,
       rsiSinyal,
-      limit = 100,
+      limit = 1000,
     } = req.query;
 
     let query = supabase
@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
     }
 
     if (fonKategorisi) {
-      query = query.eq('fon_kategorisi', fonKategorisi);
+      query = query.ilike('fon_kategorisi', `%${fonKategorisi}%`);
     }
 
     if (minRisk !== undefined) {
