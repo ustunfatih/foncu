@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchOverlap } from '../api';
 import { OverlapResult } from '../types';
 
@@ -32,6 +32,20 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [filterMin, setFilterMin] = useState(2);
+  const hasAutoAnalyzed = useRef(false);
+
+  // Sync initialFunds prop into local state (P2 fix)
+  useEffect(() => {
+    const incoming = initialFunds.join(',');
+    if (incoming && incoming !== selectedFunds.join(',')) {
+      setSelectedFunds(initialFunds);
+      setResult(null);
+      setFilterMin(2);
+      hasAutoAnalyzed.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFunds.join(',')]);
 
   const addFund = () => {
     const code = fundInput.trim().toUpperCase();
@@ -49,6 +63,7 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
     try {
       const data = await fetchOverlap(selectedFunds);
       setResult(data);
+      setFilterMin(2);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Analiz başarısız');
     } finally {
@@ -56,9 +71,22 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
     }
   };
 
-  const visibleHoldings = result
-    ? (showAll ? result.sharedHoldings : result.sharedHoldings.slice(0, 10))
+  // Auto-analyze when ≥2 funds are pre-populated (P3 fix)
+  useEffect(() => {
+    if (selectedFunds.length >= 2 && !result && !loading && !hasAutoAnalyzed.current) {
+      hasAutoAnalyzed.current = true;
+      analyze();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFunds.length, result]);
+
+  // Non-destructive filtering (P6 fix)
+  const filteredHoldings = result
+    ? result.sharedHoldings.filter(h => h.fundCount >= filterMin)
     : [];
+  const visibleHoldings = showAll ? filteredHoldings : filteredHoldings.slice(0, 10);
+
+  const hasMatrixData = result && Object.keys(result.matrix).length > 0;
 
   return (
     <div className="container">
@@ -117,7 +145,24 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
 
       {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
 
-      {result && (
+      {/* Warnings from backend (P5) */}
+      {result?.warnings && result.warnings.length > 0 && (
+        <div className="card" style={{ background: '#fff8e1', border: '1px solid #ffe082', marginBottom: 16, padding: '8px 16px', fontSize: 13, color: '#92400e' }}>
+          {result.warnings.map((w, i) => <div key={i}>{w}</div>)}
+        </div>
+      )}
+
+      {/* Empty state (P4) */}
+      {result && !hasMatrixData && (
+        <div className="card" style={{ textAlign: 'center', padding: 32, color: '#888' }}>
+          <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>Veri bulunamadı</p>
+          <p style={{ fontSize: 13, margin: 0 }}>
+            Seçili fonlar için holding verisi henüz mevcut değil. Veriler her gün otomatik güncellenir.
+          </p>
+        </div>
+      )}
+
+      {result && hasMatrixData && (
         <>
           {/* Report date */}
           {result.rapor.yil && (
@@ -146,7 +191,7 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
                     <td style={{ padding: '8px 12px', fontWeight: 700, color: FUND_COLORS[ri % FUND_COLORS.length].text }}>
                       {rowCode}
                     </td>
-                    {selectedFunds.map((colCode, ci) => {
+                    {selectedFunds.map((colCode) => {
                       if (rowCode === colCode) return (
                         <td key={colCode} style={{ padding: '8px 12px', textAlign: 'center', color: '#ccc' }}>—</td>
                       );
@@ -173,15 +218,17 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
           {/* Shared Holdings Table */}
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div className="section-title" style={{ margin: 0 }}>Ortak Hisseler ({result.sharedHoldings.length})</div>
+              <div className="section-title" style={{ margin: 0 }}>Ortak Hisseler ({filteredHoldings.length})</div>
               <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
                 {[2, 3, 4].map(n => (
                   selectedFunds.length >= n && (
-                    <button key={n} className="chip" style={{ fontSize: 10 }}
-                      onClick={() => setResult(prev => prev ? {
-                        ...prev,
-                        sharedHoldings: [...result.sharedHoldings].filter(h => Object.keys(h.weights).length >= n)
-                      } : prev)}>
+                    <button key={n} className="chip"
+                      style={{
+                        fontSize: 10,
+                        background: filterMin === n ? '#ede9fe' : undefined,
+                        fontWeight: filterMin === n ? 700 : undefined,
+                      }}
+                      onClick={() => setFilterMin(n)}>
                       {n}+ Fon
                     </button>
                   )
@@ -221,12 +268,12 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
                   ))}
                 </tbody>
               </table>
-              {result.sharedHoldings.length > 10 && (
+              {filteredHoldings.length > 10 && (
                 <button onClick={() => setShowAll(p => !p)} style={{
                   display: 'block', margin: '10px auto 0', fontSize: 12, color: '#5b21b6',
                   background: 'none', border: '1px solid #c4b5fd', borderRadius: 6, padding: '4px 16px', cursor: 'pointer'
                 }}>
-                  {showAll ? 'Daha az göster' : `${result.sharedHoldings.length - 10} tane daha göster`}
+                  {showAll ? 'Daha az göster' : `${filteredHoldings.length - 10} tane daha göster`}
                 </button>
               )}
             </div>

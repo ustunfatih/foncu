@@ -8,6 +8,7 @@ const supabase = require('./supabase');
  */
 async function upsertRows(table, rows, conflictColumn) {
   if (!rows.length) return { count: 0 };
+  if (!supabase) throw new Error('Supabase client is not initialized (missing env vars)');
   const { error, count } = await supabase
     .from(table)
     .upsert(rows, { onConflict: conflictColumn, count: 'exact' });
