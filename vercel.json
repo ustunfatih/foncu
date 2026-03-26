@@ -6,9 +6,6 @@
     }
   ],
   "functions": {
-    "api/seed-holdings.js": {
-      "maxDuration": 60
-    },
     "api/sync-fintables.js": {
       "maxDuration": 60
     }
