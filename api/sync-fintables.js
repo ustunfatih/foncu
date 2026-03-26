@@ -7,8 +7,10 @@ const { invalidateCacheByPrefix } = require('./_lib/cache');
 const CRON_SECRET = process.env.CRON_SECRET;
 
 module.exports = async (req, res) => {
-  const isVercelCron = req.headers['x-vercel-cron'] === '1';
-  const isManual = req.query.secret === CRON_SECRET && !!CRON_SECRET;
+  // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+  const bearerToken = (req.headers['authorization'] || '').replace('Bearer ', '');
+  const isVercelCron = !!CRON_SECRET && bearerToken === CRON_SECRET;
+  const isManual = !!CRON_SECRET && req.query.secret === CRON_SECRET;
   if (!isVercelCron && !isManual) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
