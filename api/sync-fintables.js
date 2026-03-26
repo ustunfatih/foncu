@@ -16,6 +16,7 @@ module.exports = async (req, res) => {
   }
 
   const phase = (req.query.phase || 'all').toString().toLowerCase();
+  const fintablesToken = req.query.token || undefined; // optional one-time token override
   const shouldBackfillMissingHistory =
     req.query.backfillMissingHistory === '1' || req.query.backfillMissingHistory === 'true';
   const log = [];
@@ -75,12 +76,12 @@ module.exports = async (req, res) => {
     }
 
     if (shouldRunHoldings) {
-      const holdingResult = await syncFundHoldings(log);
+      const holdingResult = await syncFundHoldings(log, fintablesToken);
       summary.holdingCount = holdingResult.holdingCount;
     }
 
     if (shouldRunEvents) {
-      const kapResult = await syncKapEvents(log);
+      const kapResult = await syncKapEvents(log, fintablesToken);
       summary.kapEventCount = kapResult.kapEventCount;
     }
 
