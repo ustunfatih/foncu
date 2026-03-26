@@ -7,13 +7,16 @@ const { invalidateCacheByPrefix } = require('./_lib/cache');
 const CRON_SECRET = process.env.CRON_SECRET;
 
 module.exports = async (req, res) => {
-  const isVercelCron = req.headers['x-vercel-cron'] === '1';
-  const isManual = req.query.secret === CRON_SECRET && !!CRON_SECRET;
+  // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+  const bearerToken = (req.headers['authorization'] || '').replace('Bearer ', '');
+  const isVercelCron = !!CRON_SECRET && bearerToken === CRON_SECRET;
+  const isManual = !!CRON_SECRET && req.query.secret === CRON_SECRET;
   if (!isVercelCron && !isManual) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const phase = (req.query.phase || 'all').toString().toLowerCase();
+  const fintablesToken = req.query.token || undefined; // optional one-time token override
   const shouldBackfillMissingHistory =
     req.query.backfillMissingHistory === '1' || req.query.backfillMissingHistory === 'true';
   const log = [];
@@ -73,12 +76,12 @@ module.exports = async (req, res) => {
     }
 
     if (shouldRunHoldings) {
-      const holdingResult = await syncFundHoldings(log);
+      const holdingResult = await syncFundHoldings(log, fintablesToken);
       summary.holdingCount = holdingResult.holdingCount;
     }
 
     if (shouldRunEvents) {
-      const kapResult = await syncKapEvents(log);
+      const kapResult = await syncKapEvents(log, fintablesToken);
       summary.kapEventCount = kapResult.kapEventCount;
     }
 

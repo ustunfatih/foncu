@@ -5,6 +5,11 @@
       "schedule": "0 23 * * *"
     }
   ],
+  "functions": {
+    "api/sync-fintables.js": {
+      "maxDuration": 60
+    }
+  },
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
   "devCommand": "cd frontend && npm run dev",
