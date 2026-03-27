@@ -13,11 +13,21 @@ on:
         description: 'Optional single fund code for a focused retry'
         required: false
         type: string
+      batch_size:
+        description: 'How many funds to process per chunk'
+        required: false
+        default: '50'
+        type: string
+      cooldown_seconds:
+        description: 'Pause between chunks to reduce rate limits'
+        required: false
+        default: '45'
+        type: string
 
 jobs:
   sync-kap-holdings:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     permissions:
       contents: read
 
@@ -38,8 +48,10 @@ jobs:
       - name: Run monthly holdings sync
         env:
           PYTHONUNBUFFERED: "1"
-          KAP_HOLDINGS_MAX_WORKERS: "10"
+          KAP_HOLDINGS_MAX_WORKERS: "4"
           KAP_HOLDINGS_LOOKBACK_DAYS: "120"
+          KAP_HOLDINGS_BATCH_SIZE: ${{ inputs.batch_size || '50' }}
+          KAP_HOLDINGS_BATCH_COOLDOWN_SECONDS: ${{ inputs.cooldown_seconds || '45' }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |

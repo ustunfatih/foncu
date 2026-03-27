@@ -25,6 +25,7 @@ from typing import Any
 import pdfplumber
 import requests
 from pypdf import PdfReader
+from requests import Response
 
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
 
@@ -39,6 +40,9 @@ HTTP_READ_TIMEOUT = 20
 PDF_READ_TIMEOUT = 45
 SUPABASE_TIMEOUT = 60
 SUPABASE_WRITE_TIMEOUT = 120
+RATE_LIMIT_WAIT_SECONDS = 45
+DEFAULT_BATCH_SIZE = 100
+DEFAULT_BATCH_COOLDOWN_SECONDS = 30
 
 STRICT_ROW_PATTERN = re.compile(
     r"^(?P<symbol>[A-Z0-9.\-]{2,12})\s+"
@@ -121,6 +125,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fund-code", action="append", dest="fund_codes", help="Sync only the given fund code(s)")
     parser.add_argument("--max-workers", type=int, default=int(os.getenv("KAP_HOLDINGS_MAX_WORKERS", "10")))
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=int(os.getenv("KAP_HOLDINGS_BATCH_SIZE", str(DEFAULT_BATCH_SIZE))),
+        help="How many funds to process in each chunk",
+    )
+    parser.add_argument(
+        "--cooldown-seconds",
+        type=int,
+        default=int(os.getenv("KAP_HOLDINGS_BATCH_COOLDOWN_SECONDS", str(DEFAULT_BATCH_COOLDOWN_SECONDS))),
+        help="How long to pause between chunks",
+    )
+    parser.add_argument(
+        "--resume",
+        dest="resume",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip funds that already have holdings stored for the target period",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=int(os.getenv("KAP_HOLDINGS_LOOKBACK_DAYS", "120")),
@@ -175,6 +198,63 @@ def build_supabase_headers(service_role_key: str) -> dict[str, str]:
     }
 
 
+def request_with_backoff(
+    method: str,
+    url: str,
+    *,
+    attempts: int = 4,
+    rate_limit_wait_seconds: int = RATE_LIMIT_WAIT_SECONDS,
+    **kwargs: Any,
+) -> Response:
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            response = requests.request(method, url, **kwargs)
+            if response.status_code in {403, 429}:
+                retry_after = response.headers.get("Retry-After")
+                wait_seconds = rate_limit_wait_seconds
+                if retry_after:
+                    try:
+                        wait_seconds = max(wait_seconds, int(retry_after))
+                    except ValueError:
+                        pass
+                if attempt == attempts - 1:
+                    response.raise_for_status()
+                print(
+                    f"[rate-limit] {method.upper()} {url} returned {response.status_code}; "
+                    f"sleeping {wait_seconds}s before retry {attempt + 2}/{attempts}",
+                    flush=True,
+                )
+                time.sleep(wait_seconds)
+                continue
+            response.raise_for_status()
+            return response
+        except requests.HTTPError as exc:
+            last_error = exc
+            if attempt == attempts - 1:
+                raise
+            wait_seconds = min(rate_limit_wait_seconds, 8 * (attempt + 1))
+            print(
+                f"[retry] {method.upper()} {url} failed with HTTP error; "
+                f"sleeping {wait_seconds}s before retry {attempt + 2}/{attempts}",
+                flush=True,
+            )
+            time.sleep(wait_seconds)
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt == attempts - 1:
+                raise
+            wait_seconds = min(15, 3 * (attempt + 1))
+            print(
+                f"[retry] {method.upper()} {url} failed with network error; "
+                f"sleeping {wait_seconds}s before retry {attempt + 2}/{attempts}",
+                flush=True,
+            )
+            time.sleep(wait_seconds)
+
+    raise SyncError(f"Request failed for {url}: {last_error}")
+
+
 def supabase_select(url: str, key: str, path: str, params: dict[str, Any]) -> list[dict[str, Any]]:
     headers = build_supabase_headers(key)
     rows: list[dict[str, Any]] = []
@@ -182,13 +262,13 @@ def supabase_select(url: str, key: str, path: str, params: dict[str, Any]) -> li
     limit = 1000
 
     while True:
-        response = requests.get(
+        response = request_with_backoff(
+            "get",
             f"{url}/rest/v1/{path}",
             headers=headers,
             params={**params, "limit": limit, "offset": offset},
             timeout=SUPABASE_TIMEOUT,
         )
-        response.raise_for_status()
         page = response.json()
         rows.extend(page)
         if len(page) < limit:
@@ -203,14 +283,14 @@ def supabase_upsert(url: str, key: str, path: str, rows: list[dict[str, Any]], c
         return
     headers = build_supabase_headers(key)
     headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
-    response = requests.post(
+    request_with_backoff(
+        "post",
         f"{url}/rest/v1/{path}",
         headers=headers,
         params={"on_conflict": conflict},
         json=rows,
         timeout=SUPABASE_WRITE_TIMEOUT,
     )
-    response.raise_for_status()
 
 
 def load_fund_profiles(
@@ -244,6 +324,30 @@ def load_fund_profiles(
     if allowed_codes is not None:
         rows = [row for row in rows if row.get("fon_kodu") in allowed_codes]
     return rows
+
+
+def load_existing_holdings_for_period(
+    supabase_url: str,
+    service_key: str,
+    target_year: int,
+    target_month: int,
+) -> tuple[set[str], int]:
+    rows = supabase_select(
+        supabase_url,
+        service_key,
+        "fund_holdings",
+        {
+            "select": "fon_kodu",
+            "rapor_yil": f"eq.{target_year}",
+            "rapor_ay": f"eq.{target_month}",
+        },
+    )
+    completed_codes = {
+        str(row.get("fon_kodu", "")).strip().upper()
+        for row in rows
+        if str(row.get("fon_kodu", "")).strip()
+    }
+    return completed_codes, len(rows)
 
 
 def load_tefas_tradable_codes() -> set[str]:
@@ -287,14 +391,14 @@ def fetch_tefas_detail(fund_code: str) -> dict[str, Any]:
     last_error: Exception | None = None
     for attempt in range(3):
         try:
-            response = requests.post(
+            response = request_with_backoff(
+                "post",
                 TEFAS_ANALYZE_URL,
                 data={"dil": "TR", "fonkod": fund_code.upper()},
                 headers=headers,
                 timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
                 verify=False,
             )
-            response.raise_for_status()
             return response.json()
         except Exception as exc:  # noqa: BLE001
             last_error = exc
@@ -304,18 +408,22 @@ def fetch_tefas_detail(fund_code: str) -> dict[str, Any]:
 
 
 def extract_obj_id_from_kap_page(kap_link: str) -> str | None:
-    html = requests.get(kap_link, timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT)).text
+    html = request_with_backoff(
+        "get",
+        kap_link,
+        timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
+    ).text
     match = re.search(r'objId\\":\\"([a-fA-F0-9]{32})', html)
     return match.group(1) if match else None
 
 
 def get_disclosures(kap_fund_id: str, days: int) -> list[dict[str, Any]]:
     normalized_days = max(30, min(int(days), 365))
-    response = requests.get(
+    response = request_with_backoff(
+        "get",
         f"{KAP_DISCLOSURE_FILTER_URL}/{kap_fund_id}/{PORTFOLIO_REPORT_DISCLOSURE_TYPE}/{normalized_days}",
         timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
     )
-    response.raise_for_status()
     return response.json()
 
 
@@ -328,7 +436,8 @@ def choose_disclosure(disclosures: list[dict[str, Any]], year: int, month: int) 
 
 
 def get_file_id(disclosure_index: int) -> str | None:
-    html = requests.get(
+    html = request_with_backoff(
+        "get",
         f"{KAP_DISCLOSURE_PAGE_URL}/{disclosure_index}",
         timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
     ).text
@@ -337,11 +446,11 @@ def get_file_id(disclosure_index: int) -> str | None:
 
 
 def download_pdf(file_id: str) -> bytes:
-    response = requests.get(
+    response = request_with_backoff(
+        "get",
         f"{KAP_FILE_DOWNLOAD_URL}/{file_id}",
         timeout=(HTTP_CONNECT_TIMEOUT, PDF_READ_TIMEOUT),
     )
-    response.raise_for_status()
     data = response.content
     pdf_start = data.find(b"%PDF-")
     if pdf_start == -1:
@@ -472,6 +581,91 @@ def build_holdings_rows(fund_code: str, year: int, month: int, holdings: list[Ho
     return rows
 
 
+def build_snapshot_payload(
+    target_year: int,
+    target_month: int,
+    *,
+    fund_count: int,
+    holding_count: int,
+    status: str,
+) -> list[dict[str, Any]]:
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    return [{
+        "rapor_yil": target_year,
+        "rapor_ay": target_month,
+        "acquired_at": now,
+        "source": "kap_pdf_hybrid_parser",
+        "fund_count": fund_count,
+        "holding_count": holding_count,
+        "status": status,
+        "updated_at": now,
+    }]
+
+
+def chunk_profiles(profiles: list[dict[str, Any]], batch_size: int) -> list[list[dict[str, Any]]]:
+    normalized_size = max(1, int(batch_size))
+    return [profiles[index:index + normalized_size] for index in range(0, len(profiles), normalized_size)]
+
+
+def persist_batch(
+    supabase_url: str,
+    supabase_key: str,
+    target_year: int,
+    target_month: int,
+    batch_results: list[dict[str, Any]],
+    batch_holdings: list[dict[str, Any]],
+    cumulative_ok_funds: int,
+    cumulative_holding_rows: int,
+    *,
+    final: bool,
+    has_failures: bool,
+) -> None:
+    mapping_rows = [
+        {
+            "fon_kodu": result["fund_code"],
+            "kap_link": result["kap_link"],
+            "kap_fund_id": result["kap_fund_id"],
+            "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        }
+        for result in batch_results
+        if result.get("kap_link") and result.get("kap_fund_id")
+    ]
+
+    if mapping_rows:
+        deduped_mapping_rows = list({row["fon_kodu"]: row for row in mapping_rows}.values())
+        supabase_upsert(
+            supabase_url,
+            supabase_key,
+            "fund_profiles",
+            deduped_mapping_rows,
+            "fon_kodu",
+        )
+
+    if batch_holdings:
+        supabase_upsert(
+            supabase_url,
+            supabase_key,
+            "fund_holdings",
+            batch_holdings,
+            "fon_kodu,hisse_kodu,rapor_yil,rapor_ay",
+        )
+
+    snapshot_status = "ready" if final and not has_failures else "partial"
+    supabase_upsert(
+        supabase_url,
+        supabase_key,
+        "fund_holdings_snapshots",
+        build_snapshot_payload(
+            target_year,
+            target_month,
+            fund_count=cumulative_ok_funds,
+            holding_count=cumulative_holding_rows,
+            status=snapshot_status,
+        ),
+        "rapor_yil,rapor_ay",
+    )
+
+
 def sync_single_fund(profile: dict[str, Any], target_year: int, target_month: int, days: int) -> dict[str, Any]:
     code = profile["fon_kodu"].upper()
     kap_link = profile.get("kap_link")
@@ -527,97 +721,159 @@ def main() -> int:
     if not profiles:
         raise SyncError("No TEFAS-tradable mutual fund profiles found to sync")
 
+    existing_completed_codes: set[str] = set()
+    existing_holding_rows = 0
+    if args.resume:
+        existing_completed_codes, existing_holding_rows = load_existing_holdings_for_period(
+            supabase_url,
+            supabase_key,
+            target_year,
+            target_month,
+        )
+        if existing_completed_codes:
+            profiles = [profile for profile in profiles if profile["fon_kodu"] not in existing_completed_codes]
+
+    total_requested = len(profiles) + len(existing_completed_codes)
+    if not profiles:
+        print(
+            f"All {len(existing_completed_codes)} requested funds already have holdings for "
+            f"{month_name(target_year, target_month)}; nothing to do.",
+            flush=True,
+        )
+        persist_batch(
+            supabase_url,
+            supabase_key,
+            target_year,
+            target_month,
+            [],
+            [],
+            len(existing_completed_codes),
+            existing_holding_rows,
+            final=True,
+            has_failures=False,
+        )
+        summary = {
+            "target_period": month_name(target_year, target_month),
+            "total_funds": total_requested,
+            "already_synced_funds": len(existing_completed_codes),
+            "ok_funds": len(existing_completed_codes),
+            "no_stock_holdings": 0,
+            "failed_funds": 0,
+            "holding_rows": existing_holding_rows,
+            "elapsed_seconds": 0,
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
+        return 0
+
+    batches = chunk_profiles(profiles, args.batch_size)
+
     print(
         f"Syncing KAP holdings for {len(profiles)} TEFAS-tradable mutual funds "
         f"for {month_name(target_year, target_month)}",
         flush=True,
     )
     print(f"[scope] latest TEFAS YAT universe contains {len(tefas_codes)} fund codes", flush=True)
+    if existing_completed_codes:
+        print(
+            f"[resume] skipping {len(existing_completed_codes)} funds that already have stored holdings "
+            f"for {month_name(target_year, target_month)}",
+            flush=True,
+        )
+    print(
+        f"[chunking] processing {len(batches)} batch(es) of up to {max(1, args.batch_size)} funds "
+        f"with a {max(0, args.cooldown_seconds)}s cooldown between batches",
+        flush=True,
+    )
 
     results: list[dict[str, Any]] = []
-    all_holdings: list[dict[str, Any]] = []
-    mapping_rows: list[dict[str, Any]] = []
-    completed = 0
+    total_completed = 0
+    total_ok_funds = len(existing_completed_codes)
+    total_holding_rows = existing_holding_rows
+    any_failures = False
 
     started = time.time()
-    with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
-        futures = {
-            executor.submit(sync_single_fund, profile, target_year, target_month, args.days): profile["fon_kodu"]
-            for profile in profiles
-        }
-        for future in as_completed(futures):
-            code = futures[future]
-            try:
-                result = future.result()
-            except Exception as exc:  # noqa: BLE001
-                result = {"fund_code": code, "status": "error", "error": str(exc), "holdings": []}
+    for batch_number, batch_profiles in enumerate(batches, start=1):
+        batch_results: list[dict[str, Any]] = []
+        batch_holdings: list[dict[str, Any]] = []
+        batch_started = time.time()
+        print(
+            f"[batch {batch_number}/{len(batches)}] starting {len(batch_profiles)} funds",
+            flush=True,
+        )
 
-            results.append(result)
-            all_holdings.extend(result.get("holdings", []))
-            completed += 1
+        with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
+            futures = {
+                executor.submit(sync_single_fund, profile, target_year, target_month, args.days): profile["fon_kodu"]
+                for profile in batch_profiles
+            }
+            for future in as_completed(futures):
+                code = futures[future]
+                try:
+                    result = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    result = {"fund_code": code, "status": "error", "error": str(exc), "holdings": []}
 
-            if result.get("kap_link") and result.get("kap_fund_id"):
-                mapping_rows.append({
-                    "fon_kodu": result["fund_code"],
-                    "kap_link": result["kap_link"],
-                    "kap_fund_id": result["kap_fund_id"],
-                    "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                })
+                results.append(result)
+                batch_results.append(result)
+                batch_holdings.extend(result.get("holdings", []))
+                total_completed += 1
 
+                print(
+                    f"[{total_completed}/{len(profiles)}] [{result['fund_code']}] {result['status']}"
+                    + (
+                        f" rows={result.get('row_count', 0)} weight={result.get('total_weight', 0)}"
+                        if result["status"] in {"ok", "no_stock_holdings"}
+                        else ""
+                    )
+                    + (f" error={result['error']}" if result.get("error") else ""),
+                    flush=True,
+                )
+
+        batch_ok_results = [result for result in batch_results if result["status"] == "ok"]
+        batch_failed_results = [result for result in batch_results if result["status"] not in {"ok", "no_stock_holdings"}]
+        total_ok_funds += len(batch_ok_results)
+        total_holding_rows += len(batch_holdings)
+        any_failures = any_failures or bool(batch_failed_results)
+
+        if not args.dry_run:
+            persist_batch(
+                supabase_url,
+                supabase_key,
+                target_year,
+                target_month,
+                batch_results,
+                batch_holdings,
+                total_ok_funds,
+                total_holding_rows,
+                final=batch_number == len(batches),
+                has_failures=any_failures,
+            )
+
+        print(
+            f"[batch {batch_number}/{len(batches)}] completed in {round(time.time() - batch_started, 2)}s"
+            f" ok={len(batch_ok_results)} failed={len(batch_failed_results)} holding_rows={len(batch_holdings)}",
+            flush=True,
+        )
+        if batch_number < len(batches) and args.cooldown_seconds > 0:
             print(
-                f"[{completed}/{len(profiles)}] [{result['fund_code']}] {result['status']}"
-                + (f" rows={result.get('row_count', 0)} weight={result.get('total_weight', 0)}" if result["status"] in {"ok", "no_stock_holdings"} else "")
-                + (f" error={result['error']}" if result.get("error") else ""),
+                f"[batch {batch_number}/{len(batches)}] cooling down for {args.cooldown_seconds}s",
                 flush=True,
             )
+            time.sleep(args.cooldown_seconds)
 
     ok_results = [result for result in results if result["status"] == "ok"]
     failed_results = [result for result in results if result["status"] not in {"ok", "no_stock_holdings"}]
     elapsed = round(time.time() - started, 2)
 
-    if not args.dry_run:
-        if mapping_rows:
-            deduped_mapping_rows = list({row["fon_kodu"]: row for row in mapping_rows}.values())
-            supabase_upsert(
-                supabase_url,
-                supabase_key,
-                "fund_profiles",
-                deduped_mapping_rows,
-                "fon_kodu",
-            )
-        supabase_upsert(
-            supabase_url,
-            supabase_key,
-            "fund_holdings",
-            all_holdings,
-            "fon_kodu,hisse_kodu,rapor_yil,rapor_ay",
-        )
-        snapshot_status = "ready" if not failed_results else "partial"
-        snapshot_payload = [{
-            "rapor_yil": target_year,
-            "rapor_ay": target_month,
-            "acquired_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "source": "kap_pdf_hybrid_parser",
-            "fund_count": len(ok_results),
-            "holding_count": len(all_holdings),
-            "status": snapshot_status,
-            "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }]
-        supabase_upsert(
-            supabase_url,
-            supabase_key,
-            "fund_holdings_snapshots",
-            snapshot_payload,
-            "rapor_yil,rapor_ay",
-        )
-
     summary = {
         "target_period": month_name(target_year, target_month),
-        "total_funds": len(profiles),
-        "ok_funds": len(ok_results),
+        "total_funds": total_requested,
+        "processed_funds": len(profiles),
+        "already_synced_funds": len(existing_completed_codes),
+        "ok_funds": len(ok_results) + len(existing_completed_codes),
         "no_stock_holdings": len([result for result in results if result["status"] == "no_stock_holdings"]),
         "failed_funds": len(failed_results),
-        "holding_rows": len(all_holdings),
+        "holding_rows": total_holding_rows,
         "elapsed_seconds": elapsed,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
