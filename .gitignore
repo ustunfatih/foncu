@@ -91,3 +91,5 @@ frontend/.env.production
 
 # Test files
 test-tefas.js
+.vercel
+.env*.local
