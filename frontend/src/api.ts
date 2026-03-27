@@ -27,8 +27,19 @@ const getApiBase = (): string => {
 
 const handleResponse = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || 'Request failed');
+    const raw = await response.text();
+    if (!raw) {
+      throw new Error('Request failed');
+    }
+
+    let parsedMessage: string | null = null;
+    try {
+      const parsed = JSON.parse(raw) as { error?: string; message?: string };
+      parsedMessage = parsed.error || parsed.message || null;
+    } catch {
+      parsedMessage = null;
+    }
+    throw new Error(parsedMessage || raw);
   }
   return response.json() as Promise<T>;
 };

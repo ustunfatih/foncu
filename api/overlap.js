@@ -71,6 +71,10 @@ module.exports = async (req, res) => {
       ...(missingFunds.length > 0 && {
         warnings: missingFunds.map(c => `${c} için holding verisi bulunamadı`),
       }),
+      meta: {
+        source: 'fund_holdings',
+        reportType: 'monthly_kap_snapshot',
+      },
     });
   } catch (err) {
     console.error('[overlap] Error:', err);

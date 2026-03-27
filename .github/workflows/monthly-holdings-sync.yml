@@ -1,0 +1,50 @@
+name: Monthly Fund Holdings Sync
+
+on:
+  schedule:
+    - cron: '0 10 10 * *'
+  workflow_dispatch:
+    inputs:
+      target_period:
+        description: 'Optional target period in YYYY-MM format'
+        required: false
+        type: string
+      fund_code:
+        description: 'Optional single fund code for a focused retry'
+        required: false
+        type: string
+
+jobs:
+  sync-kap-holdings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install parser dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements-kap-holdings.txt
+
+      - name: Run monthly holdings sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ inputs.target_period }}" ]; then
+            ARGS="$ARGS --target-period ${{ inputs.target_period }}"
+          fi
+          if [ -n "${{ inputs.fund_code }}" ]; then
+            ARGS="$ARGS --fund-code ${{ inputs.fund_code }}"
+          fi
+          python scripts/sync_kap_holdings.py $ARGS
