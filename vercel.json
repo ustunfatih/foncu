@@ -16,6 +16,14 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/api/sync-fintables-daily",
+      "destination": "/api/sync-fintables?phase=daily"
+    },
+    {
+      "source": "/api/sync-fund-holdings-monthly",
+      "destination": "/api/sync-fintables?phase=holdings"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/:path*"
     },
