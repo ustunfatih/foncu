@@ -1,5 +1,6 @@
 const supabase = require('./_lib/supabase');
 const { fetchLatestPriceBatch } = require('./_lib/history');
+const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
 
 async function handleValuation(req, res) {
   if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
@@ -62,6 +63,8 @@ async function handleValuation(req, res) {
 }
 
 async function handleExposure(req, res) {
+  if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+
   const { holdings } = req.body;
   if (!Array.isArray(holdings) || !holdings.length) {
     return res.status(400).json({ error: 'holdings array required' });
@@ -75,25 +78,24 @@ async function handleExposure(req, res) {
     holdings.map(h => [h.fundCode.toUpperCase(), h.currentValue / totalValue])
   );
 
+  const reportPeriod = await resolveLatestCommonHoldingsPeriod(fundCodes);
+  if (!reportPeriod) {
+    return res.status(409).json({
+      error: 'Selected funds do not share a common monthly holdings report yet',
+    });
+  }
+
   const { data: holdingRows, error } = await supabase
     .from('fund_holdings')
     .select('fon_kodu, hisse_kodu, yuzdesel_agirlik, rapor_yil, rapor_ay')
     .in('fon_kodu', fundCodes)
-    .order('rapor_yil', { ascending: false })
-    .order('rapor_ay', { ascending: false });
+    .eq('rapor_yil', reportPeriod.yil)
+    .eq('rapor_ay', reportPeriod.ay);
 
   if (error) throw error;
 
-  const latestByFund = {};
-  const filtered = [];
-  for (const row of holdingRows || []) {
-    if (!latestByFund[row.fon_kodu]) latestByFund[row.fon_kodu] = { yil: row.rapor_yil, ay: row.rapor_ay };
-    const l = latestByFund[row.fon_kodu];
-    if (row.rapor_yil === l.yil && row.rapor_ay === l.ay) filtered.push(row);
-  }
-
   const exposureMap = {};
-  for (const row of filtered) {
+  for (const row of holdingRows || []) {
     const fundAlloc = allocationByFund[row.fon_kodu] ?? 0;
     const stockWeight = (row.yuzdesel_agirlik ?? 0) / 100;
     const contribution = fundAlloc * stockWeight;
@@ -114,8 +116,11 @@ async function handleExposure(req, res) {
     }))
     .sort((a, b) => b.effectiveWeight - a.effectiveWeight);
 
-  const sample = Object.values(latestByFund)[0] ?? {};
-  return res.status(200).json({ totalValue, rapor: { yil: sample.yil ?? null, ay: sample.ay ?? null }, exposure });
+  return res.status(200).json({
+    totalValue,
+    rapor: { yil: reportPeriod.yil, ay: reportPeriod.ay },
+    exposure,
+  });
 }
 
 module.exports = async (req, res) => {

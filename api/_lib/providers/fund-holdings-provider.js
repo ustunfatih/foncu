@@ -29,11 +29,48 @@ const HOLDINGS_SQL = `
 async function syncFundHoldings(log, token) {
   log.push('Fetching fund holdings...');
 
-  const holdingRows = await fintablesQueryAll(
-    HOLDINGS_SQL,
-    'syncing fund holdings',
-    token,
-  );
+  const [latestReportPeriod] = await fintablesQuery(`
+    SELECT
+      yil AS rapor_yil,
+      ay AS rapor_ay,
+      COUNT(DISTINCT fon_kodu) AS fund_count
+    FROM fon_portfoy_dagilim_raporlari
+    GROUP BY yil, ay
+    ORDER BY yil DESC, ay DESC
+    LIMIT 1
+  `, 'discovering latest fund holdings report period');
+
+  if (!latestReportPeriod?.rapor_yil || !latestReportPeriod?.rapor_ay) {
+    throw new Error('No monthly holdings report period found in Fintables');
+  }
+
+  log.push(`Using holdings report period ${latestReportPeriod.rapor_ay}/${latestReportPeriod.rapor_yil}`);
+
+  const holdingRows = await fintablesQuery(`
+    WITH target_reports AS (
+      SELECT
+        fon_portfoy_dagilim_raporu_id,
+        fon_kodu,
+        ay,
+        yil
+      FROM fon_portfoy_dagilim_raporlari
+      WHERE yil = ${Number(latestReportPeriod.rapor_yil)}
+        AND ay = ${Number(latestReportPeriod.rapor_ay)}
+    )
+    SELECT
+      tr.fon_kodu,
+      sa.fon_kodu AS hisse_kodu,
+      sa.yuzdesel_agirlik,
+      sa.fondaki_lot,
+      tr.ay AS rapor_ay,
+      tr.yil AS rapor_yil
+    FROM target_reports tr
+    JOIN fon_portfoy_dagilim_raporu_sembol_agirliklari sa
+      ON sa.fon_portfoy_dagilim_raporu_id = tr.fon_portfoy_dagilim_raporu_id
+    JOIN hisse_senetleri hs
+      ON hs.hisse_senedi_kodu = sa.fon_kodu
+    WHERE sa.yuzdesel_agirlik > 0
+  `, 'syncing fund holdings');
 
   const holdings = holdingRows.map((row) => ({
     fon_kodu: row.fon_kodu,
@@ -52,8 +89,29 @@ async function syncFundHoldings(log, token) {
     'fon_kodu,hisse_kodu,rapor_yil,rapor_ay'
   );
 
-  log.push(`Upserted ${count} fund holdings`);
-  return { holdingCount: count };
+  await upsertRows(
+    'fund_holdings_snapshots',
+    [{
+      rapor_yil: latestReportPeriod.rapor_yil,
+      rapor_ay: latestReportPeriod.rapor_ay,
+      acquired_at: new Date().toISOString(),
+      source: 'fintables',
+      fund_count: Number(latestReportPeriod.fund_count ?? 0),
+      holding_count: holdings.length,
+      status: 'ready',
+      updated_at: new Date().toISOString(),
+    }],
+    'rapor_yil,rapor_ay'
+  );
+
+  log.push(`Upserted ${count} fund holdings for ${latestReportPeriod.rapor_ay}/${latestReportPeriod.rapor_yil}`);
+  return {
+    holdingCount: count,
+    reportPeriod: {
+      yil: latestReportPeriod.rapor_yil,
+      ay: latestReportPeriod.rapor_ay,
+    },
+  };
 }
 
 async function syncKapEvents(log, token) {

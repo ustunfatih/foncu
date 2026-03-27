@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "dev": "concurrently \"node api-server.js\" \"cd frontend && npm run dev\"",
     "build": "cd frontend && npm install && npm run build",
     "test": "jest --testPathPatterns='api/__tests__'",
     "test:watch": "jest --watch --testPathPatterns='api/__tests__'"
@@ -15,6 +16,7 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "jest": "^30.3.0"
   }
 }

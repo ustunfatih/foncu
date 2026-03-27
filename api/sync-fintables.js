@@ -47,10 +47,10 @@ module.exports = async (req, res) => {
       },
     };
 
-    const shouldRunProfiles = phase === 'all' || phase === 'profiles';
-    const shouldRunMetrics = phase === 'all' || phase === 'metrics';
+    const shouldRunProfiles = phase === 'all' || phase === 'profiles' || phase === 'daily';
+    const shouldRunMetrics = phase === 'all' || phase === 'metrics' || phase === 'daily';
     const shouldRunHoldings = phase === 'all' || phase === 'holdings';
-    const shouldRunEvents = phase === 'all' || phase === 'events';
+    const shouldRunEvents = phase === 'all' || phase === 'events' || phase === 'daily';
 
     if (shouldRunProfiles) {
       const profileResult = await syncFundProfiles(log);
@@ -78,6 +78,7 @@ module.exports = async (req, res) => {
     if (shouldRunHoldings) {
       const holdingResult = await syncFundHoldings(log, fintablesToken);
       summary.holdingCount = holdingResult.holdingCount;
+      summary.holdingsReportPeriod = holdingResult.reportPeriod ?? null;
     }
 
     if (shouldRunEvents) {

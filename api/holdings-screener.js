@@ -1,5 +1,6 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
+const { resolveLatestPublishedHoldingsPeriod } = require('./_lib/holdings-periods');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
@@ -23,22 +24,22 @@ module.exports = async (req, res) => {
       }),
       TTL.HOLDINGS_SCREEN,
       async () => {
+        const reportPeriod = await resolveLatestPublishedHoldingsPeriod();
+        if (!reportPeriod) {
+          return { rapor: null, fonlar: [], refreshedAt: null };
+        }
+
         const { data: holdingRows, error } = await supabase
           .from('fund_holdings')
           .select('fon_kodu, yuzdesel_agirlik, rapor_yil, rapor_ay')
           .eq('hisse_kodu', ticker.toUpperCase())
           .gte('yuzdesel_agirlik', Number(minWeight))
-          .order('rapor_yil', { ascending: false })
-          .order('rapor_ay', { ascending: false });
+          .eq('rapor_yil', reportPeriod.yil)
+          .eq('rapor_ay', reportPeriod.ay);
 
         if (error) throw error;
 
-        const latestPerFund = {};
-        for (const row of holdingRows || []) {
-          if (!latestPerFund[row.fon_kodu]) latestPerFund[row.fon_kodu] = row;
-        }
-
-        const fundCodes = Object.keys(latestPerFund);
+        const fundCodes = [...new Set((holdingRows || []).map((row) => row.fon_kodu))];
         if (!fundCodes.length) {
           return { rapor: null, fonlar: [], refreshedAt: null };
         }
@@ -50,9 +51,10 @@ module.exports = async (req, res) => {
           .eq('fon_tipi', fon_tipi);
 
         const profileMap = Object.fromEntries((profiles ?? []).map((p) => [p.fon_kodu, p]));
+        const holdingsMap = Object.fromEntries((holdingRows ?? []).map((row) => [row.fon_kodu, row]));
         const fonlar = fundCodes
           .map((code) => {
-            const holding = latestPerFund[code];
+            const holding = holdingsMap[code];
             const profile = profileMap[code];
             if (!profile) return null;
             return {
@@ -68,7 +70,6 @@ module.exports = async (req, res) => {
           .sort((a, b) => b.agirlik - a.agirlik)
           .slice(0, Number(limit));
 
-        const sample = Object.values(latestPerFund)[0];
         const refreshedAt = (profiles || [])
           .map((row) => row.guncelleme_zamani)
           .filter(Boolean)
@@ -76,9 +77,9 @@ module.exports = async (req, res) => {
           .at(-1) || null;
 
         return {
-          rapor: sample ? { yil: sample.rapor_yil, ay: sample.rapor_ay } : null,
+          rapor: { yil: reportPeriod.yil, ay: reportPeriod.ay },
           fonlar,
-          refreshedAt,
+          refreshedAt: reportPeriod.acquiredAt ?? refreshedAt,
         };
       }
     );

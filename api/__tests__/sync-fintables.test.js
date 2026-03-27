@@ -104,6 +104,19 @@ test('supports metrics-only backfill mode', async () => {
   expect(res.payload.log).toContain('Manual metrics-only refresh can be used as a backfill for existing funds.');
 });
 
+test('supports the daily sync phase without running holdings', async () => {
+  const req = { headers: {}, query: { secret: 'test-secret', phase: 'daily' } };
+  const res = createRes();
+
+  await handler(req, res);
+
+  expect(syncFundProfiles).toHaveBeenCalled();
+  expect(syncFundAllocations).toHaveBeenCalled();
+  expect(syncFundMetrics).toHaveBeenCalled();
+  expect(syncKapEvents).toHaveBeenCalled();
+  expect(syncFundHoldings).not.toHaveBeenCalled();
+});
+
 test('can backfill missing historical data before metrics refresh', async () => {
   const req = {
     headers: {},
