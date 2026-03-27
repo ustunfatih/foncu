@@ -72,6 +72,14 @@ LOOSE_ROW_PATTERN = re.compile(
     r"(?P<ftd_pct>-?[\d\.,]+)$"
 )
 
+COMPACT_SECTION_ROW_PATTERN = re.compile(
+    r"^(?P<symbol>[A-Z0-9.\-]{2,12})\s+"
+    r"(?P<name>.+?)\s+"
+    r"(?P<nominal>-?[\d\.,]+)\s+"
+    r"(?P<market_value>-?[\d\.,]+)\s+"
+    r"(?P<ftd_pct>-?[\d\.,]+%?)$"
+)
+
 STOCK_SECTION_MARKERS = (
     "HİSSE SENETLERİ",
     "YABANCI HİSSE SENETLERİ",
@@ -177,9 +185,31 @@ def parse_decimal(value: str | float | int | None) -> float | None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    cleaned = str(value).strip().replace(".", "").replace(",", ".")
+    cleaned = str(value).strip().replace("%", "")
     if cleaned in {"", "-", "--"}:
         return None
+    if "," in cleaned and "." in cleaned:
+        if cleaned.rfind(".") > cleaned.rfind(","):
+            cleaned = cleaned.replace(",", "")
+        else:
+            cleaned = cleaned.replace(".", "").replace(",", ".")
+    elif "," in cleaned:
+        integer, _, fraction = cleaned.rpartition(",")
+        if integer and fraction:
+            if len(fraction) in {1, 2}:
+                cleaned = cleaned.replace(".", "").replace(",", ".")
+            elif len(fraction) == 3 and integer.replace(".", "").isdigit():
+                cleaned = cleaned.replace(",", "")
+            else:
+                cleaned = cleaned.replace(".", "").replace(",", ".")
+        else:
+            cleaned = cleaned.replace(",", "")
+    elif "." in cleaned:
+        integer, _, fraction = cleaned.rpartition(".")
+        if integer and fraction and len(fraction) == 3 and integer.replace(",", "").isdigit():
+            cleaned = cleaned.replace(".", "")
+        else:
+            cleaned = cleaned.replace(",", "")
     try:
         return float(cleaned)
     except ValueError:
@@ -481,6 +511,90 @@ def normalize_lines(text: str) -> list[str]:
     ]
 
 
+def is_table_section_header(line: str) -> bool:
+    return bool(re.match(r"^[A-ZÇĞİÖŞÜ]\)", line.upper()))
+
+
+def build_confidence(holdings: list[HoldingRow], strict_hits: int = 0) -> float:
+    if not holdings:
+        return 0.0
+    total_weight = sum(row.weight for row in holdings)
+    strict_ratio = strict_hits / max(len(holdings), 1)
+    return min(
+        1.0,
+        (len(holdings) / 12.0) * 0.35
+        + min(total_weight, 100) / 100.0 * 0.45
+        + strict_ratio * 0.20,
+    )
+
+
+def parse_compact_stock_section(lines: list[str], parser_name: str) -> ParseResult:
+    aggregated: dict[str, HoldingRow] = {}
+    section_found = False
+    in_stock_section = False
+
+    for line in lines:
+        upper = line.upper()
+        if any(marker in upper for marker in STOCK_SECTION_MARKERS):
+            section_found = True
+            in_stock_section = True
+            continue
+
+        if not in_stock_section:
+            continue
+
+        if upper.startswith("TOPLAM"):
+            in_stock_section = False
+            continue
+
+        if is_table_section_header(line):
+            in_stock_section = False
+            continue
+
+        if line.startswith("İhraççı") or line.startswith("Nominal Değeri"):
+            continue
+
+        match = COMPACT_SECTION_ROW_PATTERN.match(line)
+        if not match:
+            continue
+
+        symbol = match.group("symbol").replace(".E", "").upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9.\-]{1,10}", symbol):
+            continue
+
+        weight = parse_decimal(match.group("ftd_pct"))
+        nominal = parse_decimal(match.group("nominal"))
+        market_value = parse_decimal(match.group("market_value"))
+        if weight is None or weight <= 0:
+            continue
+
+        existing = aggregated.get(symbol)
+        if existing is None:
+            aggregated[symbol] = HoldingRow(
+                symbol=symbol,
+                isin=None,
+                name=match.group("name").strip(),
+                weight=weight,
+                nominal=nominal,
+                market_value=market_value,
+            )
+        else:
+            existing.weight += weight
+            if nominal is not None:
+                existing.nominal = (existing.nominal or 0.0) + nominal
+            if market_value is not None:
+                existing.market_value = (existing.market_value or 0.0) + market_value
+
+    holdings = [holding for holding in aggregated.values() if holding.weight > 0]
+    holdings.sort(key=lambda row: row.weight, reverse=True)
+    return ParseResult(
+        holdings=holdings,
+        section_found=section_found,
+        confidence=build_confidence(holdings),
+        parser=parser_name,
+    )
+
+
 def parse_holdings_from_text(text: str, parser_name: str) -> ParseResult:
     lines = normalize_lines(text)
     section_found = any(any(marker in line.upper() for marker in STOCK_SECTION_MARKERS) for line in lines)
@@ -527,10 +641,11 @@ def parse_holdings_from_text(text: str, parser_name: str) -> ParseResult:
         if holding.weight is not None and holding.weight > 0
     ]
     holdings.sort(key=lambda row: row.weight, reverse=True)
+    confidence = build_confidence(holdings, strict_hits)
 
-    total_weight = sum(row.weight for row in holdings)
-    strict_ratio = strict_hits / max(len(holdings), 1)
-    confidence = min(1.0, (len(holdings) / 12.0) * 0.35 + min(total_weight, 100) / 100.0 * 0.45 + strict_ratio * 0.20)
+    compact_attempt = parse_compact_stock_section(lines, f"{parser_name}_compact")
+    if len(compact_attempt.holdings) > len(holdings):
+        return compact_attempt
 
     return ParseResult(
         holdings=holdings,
