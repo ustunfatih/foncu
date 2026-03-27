@@ -37,6 +37,9 @@ jobs:
 
       - name: Run monthly holdings sync
         env:
+          PYTHONUNBUFFERED: "1"
+          KAP_HOLDINGS_MAX_WORKERS: "10"
+          KAP_HOLDINGS_LOOKBACK_DAYS: "120"
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |

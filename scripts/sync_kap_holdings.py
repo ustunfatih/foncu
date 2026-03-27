@@ -15,6 +15,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -32,6 +33,12 @@ KAP_DISCLOSURE_FILTER_URL = "https://kap.org.tr/tr/api/disclosure/filter/FILTERY
 KAP_DISCLOSURE_PAGE_URL = "https://www.kap.org.tr/tr/Bildirim"
 KAP_FILE_DOWNLOAD_URL = "https://kap.org.tr/tr/api/file/download"
 TEFAS_ANALYZE_URL = "https://www.tefas.gov.tr/api/DB/GetAllFundAnalyzeData"
+
+HTTP_CONNECT_TIMEOUT = 10
+HTTP_READ_TIMEOUT = 20
+PDF_READ_TIMEOUT = 45
+SUPABASE_TIMEOUT = 60
+SUPABASE_WRITE_TIMEOUT = 120
 
 STRICT_ROW_PATTERN = re.compile(
     r"^(?P<symbol>[A-Z0-9.\-]{2,12})\s+"
@@ -112,8 +119,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sync monthly fund holdings from KAP disclosures")
     parser.add_argument("--target-period", help="Target report period in YYYY-MM format")
     parser.add_argument("--fund-code", action="append", dest="fund_codes", help="Sync only the given fund code(s)")
-    parser.add_argument("--max-workers", type=int, default=int(os.getenv("KAP_HOLDINGS_MAX_WORKERS", "6")))
-    parser.add_argument("--days", type=int, default=365, help="How far back to search disclosures")
+    parser.add_argument("--max-workers", type=int, default=int(os.getenv("KAP_HOLDINGS_MAX_WORKERS", "10")))
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=int(os.getenv("KAP_HOLDINGS_LOOKBACK_DAYS", "120")),
+        help="How far back to search disclosures",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -174,7 +186,7 @@ def supabase_select(url: str, key: str, path: str, params: dict[str, Any]) -> li
             f"{url}/rest/v1/{path}",
             headers=headers,
             params={**params, "limit": limit, "offset": offset},
-            timeout=60,
+            timeout=SUPABASE_TIMEOUT,
         )
         response.raise_for_status()
         page = response.json()
@@ -196,24 +208,17 @@ def supabase_upsert(url: str, key: str, path: str, rows: list[dict[str, Any]], c
         headers=headers,
         params={"on_conflict": conflict},
         json=rows,
-        timeout=120,
+        timeout=SUPABASE_WRITE_TIMEOUT,
     )
     response.raise_for_status()
 
 
-def supabase_patch(url: str, key: str, path: str, filters: dict[str, str], payload: dict[str, Any]) -> None:
-    headers = build_supabase_headers(key)
-    response = requests.patch(
-        f"{url}/rest/v1/{path}",
-        headers=headers,
-        params=filters,
-        json=payload,
-        timeout=60,
-    )
-    response.raise_for_status()
-
-
-def load_fund_profiles(supabase_url: str, service_key: str, requested_codes: list[str] | None) -> list[dict[str, Any]]:
+def load_fund_profiles(
+    supabase_url: str,
+    service_key: str,
+    requested_codes: list[str] | None,
+    allowed_codes: set[str] | None = None,
+) -> list[dict[str, Any]]:
     params = {
         "select": "fon_kodu,unvan,kap_link,kap_fund_id",
         "fon_tipi": "eq.mutual",
@@ -236,7 +241,39 @@ def load_fund_profiles(supabase_url: str, service_key: str, requested_codes: lis
     if requested_codes:
         normalized = {code.upper() for code in requested_codes}
         rows = [row for row in rows if row.get("fon_kodu") in normalized]
+    if allowed_codes is not None:
+        rows = [row for row in rows if row.get("fon_kodu") in allowed_codes]
     return rows
+
+
+def load_tefas_tradable_codes() -> set[str]:
+    try:
+        result = subprocess.run(
+            ["node", "scripts/export_tefas_yat_codes.js"],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=True,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise SyncError("Timed out while resolving the TEFAS YAT fund universe") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        raise SyncError(f"Failed to resolve the TEFAS YAT fund universe: {detail}") from exc
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SyncError(f"TEFAS scope script returned invalid JSON: {result.stdout[:200]}") from exc
+
+    codes = {
+        str(code).strip().upper()
+        for code in payload.get("codes", [])
+        if str(code).strip()
+    }
+    if not codes:
+        raise SyncError("TEFAS scope script returned no YAT fund codes")
+    return codes
 
 
 def fetch_tefas_detail(fund_code: str) -> dict[str, Any]:
@@ -254,7 +291,7 @@ def fetch_tefas_detail(fund_code: str) -> dict[str, Any]:
                 TEFAS_ANALYZE_URL,
                 data={"dil": "TR", "fonkod": fund_code.upper()},
                 headers=headers,
-                timeout=60,
+                timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
                 verify=False,
             )
             response.raise_for_status()
@@ -267,7 +304,7 @@ def fetch_tefas_detail(fund_code: str) -> dict[str, Any]:
 
 
 def extract_obj_id_from_kap_page(kap_link: str) -> str | None:
-    html = requests.get(kap_link, timeout=60).text
+    html = requests.get(kap_link, timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT)).text
     match = re.search(r'objId\\":\\"([a-fA-F0-9]{32})', html)
     return match.group(1) if match else None
 
@@ -276,7 +313,7 @@ def get_disclosures(kap_fund_id: str, days: int) -> list[dict[str, Any]]:
     normalized_days = max(30, min(int(days), 365))
     response = requests.get(
         f"{KAP_DISCLOSURE_FILTER_URL}/{kap_fund_id}/{PORTFOLIO_REPORT_DISCLOSURE_TYPE}/{normalized_days}",
-        timeout=60,
+        timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
     )
     response.raise_for_status()
     return response.json()
@@ -291,13 +328,19 @@ def choose_disclosure(disclosures: list[dict[str, Any]], year: int, month: int) 
 
 
 def get_file_id(disclosure_index: int) -> str | None:
-    html = requests.get(f"{KAP_DISCLOSURE_PAGE_URL}/{disclosure_index}", timeout=60).text
+    html = requests.get(
+        f"{KAP_DISCLOSURE_PAGE_URL}/{disclosure_index}",
+        timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
+    ).text
     match = re.search(r"file/download/([a-f0-9]{32})", html)
     return match.group(1) if match else None
 
 
 def download_pdf(file_id: str) -> bytes:
-    response = requests.get(f"{KAP_FILE_DOWNLOAD_URL}/{file_id}", timeout=120)
+    response = requests.get(
+        f"{KAP_FILE_DOWNLOAD_URL}/{file_id}",
+        timeout=(HTTP_CONNECT_TIMEOUT, PDF_READ_TIMEOUT),
+    )
     response.raise_for_status()
     data = response.content
     pdf_start = data.find(b"%PDF-")
@@ -389,11 +432,16 @@ def parse_holdings_from_text(text: str, parser_name: str) -> ParseResult:
 
 
 def parse_holdings(pdf_bytes: bytes) -> ParseResult:
-    attempts: list[ParseResult] = []
-
     plumber_text = extract_text_with_pdfplumber(pdf_bytes)
     if plumber_text.strip():
-        attempts.append(parse_holdings_from_text(plumber_text, "pdfplumber"))
+        plumber_attempt = parse_holdings_from_text(plumber_text, "pdfplumber")
+        if plumber_attempt.section_found and (
+            len(plumber_attempt.holdings) >= 8 or plumber_attempt.confidence >= 0.7
+        ):
+            return plumber_attempt
+        attempts: list[ParseResult] = [plumber_attempt]
+    else:
+        attempts = []
 
     pypdf_text = extract_text_with_pypdf(pdf_bytes)
     if pypdf_text.strip():
@@ -474,15 +522,22 @@ def main() -> int:
     supabase_url = require_env("SUPABASE_URL")
     supabase_key = require_env("SUPABASE_SERVICE_ROLE_KEY")
     target_year, target_month = resolve_target_period(args.target_period)
-
-    profiles = load_fund_profiles(supabase_url, supabase_key, args.fund_codes)
+    tefas_codes = load_tefas_tradable_codes()
+    profiles = load_fund_profiles(supabase_url, supabase_key, args.fund_codes, tefas_codes)
     if not profiles:
-        raise SyncError("No mutual fund profiles found to sync")
+        raise SyncError("No TEFAS-tradable mutual fund profiles found to sync")
 
-    print(f"Syncing KAP holdings for {len(profiles)} mutual funds for {month_name(target_year, target_month)}")
+    print(
+        f"Syncing KAP holdings for {len(profiles)} TEFAS-tradable mutual funds "
+        f"for {month_name(target_year, target_month)}",
+        flush=True,
+    )
+    print(f"[scope] latest TEFAS YAT universe contains {len(tefas_codes)} fund codes", flush=True)
 
     results: list[dict[str, Any]] = []
     all_holdings: list[dict[str, Any]] = []
+    mapping_rows: list[dict[str, Any]] = []
+    completed = 0
 
     started = time.time()
     with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
@@ -499,26 +554,21 @@ def main() -> int:
 
             results.append(result)
             all_holdings.extend(result.get("holdings", []))
+            completed += 1
 
-            if result.get("kap_link") and result.get("kap_fund_id") and not args.dry_run:
-                try:
-                    supabase_patch(
-                        supabase_url,
-                        supabase_key,
-                        "fund_profiles",
-                        {"fon_kodu": f"eq.{result['fund_code']}"},
-                        {
-                            "kap_link": result["kap_link"],
-                            "kap_fund_id": result["kap_fund_id"],
-                            "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                        },
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    print(f"[warn] failed to update KAP mapping for {code}: {exc}")
+            if result.get("kap_link") and result.get("kap_fund_id"):
+                mapping_rows.append({
+                    "fon_kodu": result["fund_code"],
+                    "kap_link": result["kap_link"],
+                    "kap_fund_id": result["kap_fund_id"],
+                    "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                })
 
             print(
-                f"[{result['fund_code']}] {result['status']}"
+                f"[{completed}/{len(profiles)}] [{result['fund_code']}] {result['status']}"
                 + (f" rows={result.get('row_count', 0)} weight={result.get('total_weight', 0)}" if result["status"] in {"ok", "no_stock_holdings"} else "")
+                + (f" error={result['error']}" if result.get("error") else ""),
+                flush=True,
             )
 
     ok_results = [result for result in results if result["status"] == "ok"]
@@ -526,6 +576,15 @@ def main() -> int:
     elapsed = round(time.time() - started, 2)
 
     if not args.dry_run:
+        if mapping_rows:
+            deduped_mapping_rows = list({row["fon_kodu"]: row for row in mapping_rows}.values())
+            supabase_upsert(
+                supabase_url,
+                supabase_key,
+                "fund_profiles",
+                deduped_mapping_rows,
+                "fon_kodu",
+            )
         supabase_upsert(
             supabase_url,
             supabase_key,
@@ -561,7 +620,7 @@ def main() -> int:
         "holding_rows": len(all_holdings),
         "elapsed_seconds": elapsed,
     }
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
 
     return 1 if failed_results else 0
 

@@ -120,7 +120,7 @@ function buildProfileRow(row, kind, existingByCode, refreshedAt) {
     satis_valoru: existing.satis_valoru ?? null,
     fon_kategorisi: existing.fon_kategorisi ?? null,
     semsiye_fon: existing.semsiye_fon ?? null,
-    tefasa_acik: existing.tefasa_acik ?? true,
+    tefasa_acik: kind === 'YAT' ? true : (existing.tefasa_acik ?? null),
     pazar_payi: normalizeNumber(existing.pazar_payi),
     fon_buyuklugu: normalizeNumber(row.PORTFOYBUYUKLUK) ?? normalizeNumber(existing.fon_buyuklugu),
     yatirimci_sayisi: normalizeNumber(row.KISISAYISI) ?? normalizeNumber(existing.yatirimci_sayisi),
@@ -159,11 +159,15 @@ async function syncFundProfiles(log) {
   );
 
   const profiles = [];
+  const tefasMutualCodes = new Set();
   for (let index = 0; index < kinds.length; index += 1) {
     const kind = kinds[index];
     const snapshot = snapshots[index];
     for (const row of snapshot.rows) {
       if (!row?.FONKODU) continue;
+      if (kind === 'YAT') {
+        tefasMutualCodes.add(row.FONKODU.toUpperCase());
+      }
       profiles.push(buildProfileRow(row, kind, existingByCode, refreshedAt));
     }
   }
@@ -173,6 +177,29 @@ async function syncFundProfiles(log) {
   );
 
   const { count } = await upsertRows('fund_profiles', dedupedProfiles, 'fon_kodu');
+
+  const inactiveMutualCodes = Array.from(existingByCode.values())
+    .filter((row) => row.fon_tipi === 'mutual' && row.fon_kodu && !tefasMutualCodes.has(row.fon_kodu))
+    .map((row) => row.fon_kodu);
+
+  for (let index = 0; index < inactiveMutualCodes.length; index += 100) {
+    const chunk = inactiveMutualCodes.slice(index, index + 100);
+    const { error } = await supabase
+      .from('fund_profiles')
+      .update({
+        tefasa_acik: false,
+        guncelleme_zamani: refreshedAt,
+      })
+      .in('fon_kodu', chunk);
+
+    if (error) {
+      throw new Error(`Failed to mark inactive TEFAS mutual funds: ${error.message}`);
+    }
+  }
+
+  if (inactiveMutualCodes.length > 0) {
+    log.push(`Marked ${inactiveMutualCodes.length} mutual funds as TEFAS-inactive`);
+  }
   log.push(`Upserted ${count} fund profiles from public TEFAS`);
 
   return {
