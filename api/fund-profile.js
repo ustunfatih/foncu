@@ -2,6 +2,7 @@ const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { fetchFundHistory } = require('./_lib/history');
 const { calculateSharpeRatio, calculateVolatility, calculateMaxDrawdown } = require('./_lib/analytics');
+const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
@@ -26,23 +27,24 @@ module.exports = async (req, res) => {
           throw error;
         }
 
-        const { data: holdings } = await supabase
-          .from('fund_holdings')
-          .select('hisse_kodu, yuzdesel_agirlik, rapor_yil, rapor_ay')
-          .eq('fon_kodu', code)
-          .order('rapor_yil', { ascending: false })
-          .order('rapor_ay', { ascending: false })
-          .order('yuzdesel_agirlik', { ascending: false })
-          .limit(50);
+        const latestRapor = await resolveLatestCommonHoldingsPeriod([code]);
+        let topHoldings = [];
 
-        const latestRapor = holdings?.[0]
-          ? { yil: holdings[0].rapor_yil, ay: holdings[0].rapor_ay }
-          : null;
+        if (latestRapor) {
+          const { data: holdings, error: holdingsErr } = await supabase
+            .from('fund_holdings')
+            .select('hisse_kodu, yuzdesel_agirlik')
+            .eq('fon_kodu', code)
+            .eq('rapor_yil', latestRapor.yil)
+            .eq('rapor_ay', latestRapor.ay)
+            .order('yuzdesel_agirlik', { ascending: false })
+            .limit(10);
 
-        const topHoldings = (holdings ?? [])
-          .filter((holding) => latestRapor && holding.rapor_yil === latestRapor.yil && holding.rapor_ay === latestRapor.ay)
-          .slice(0, 10)
+          if (holdingsErr) throw holdingsErr;
+
+          topHoldings = (holdings ?? [])
           .map((holding) => ({ ticker: holding.hisse_kodu, agirlik: holding.yuzdesel_agirlik }));
+        }
 
         let sharpe = null;
         let maxDrawdown = null;
