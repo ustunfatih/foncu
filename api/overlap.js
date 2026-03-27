@@ -6,6 +6,10 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
 
   try {
+    if (!supabase) {
+      return res.status(503).json({ error: 'Database not configured' });
+    }
+
     const { funds: fundsParam } = req.query;
     if (!fundsParam) return res.status(400).json({ error: 'funds param required' });
     if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
@@ -31,6 +35,9 @@ module.exports = async (req, res) => {
 
     const holdingsByFund = groupByFund(holdingRows || []);
     const matrix = buildMatrix(holdingsByFund);
+
+    // Detect funds with no holdings data
+    const missingFunds = fundCodes.filter(c => !holdingsByFund[c]);
 
     // Build shared holdings list (stocks held by 2+ funds)
     const allTickers = new Set((holdingRows || []).map(r => r.hisse_kodu));
@@ -61,6 +68,9 @@ module.exports = async (req, res) => {
       rapor: { yil: reportPeriod.yil, ay: reportPeriod.ay },
       matrix,
       sharedHoldings,
+      ...(missingFunds.length > 0 && {
+        warnings: missingFunds.map(c => `${c} için holding verisi bulunamadı`),
+      }),
     });
   } catch (err) {
     console.error('[overlap] Error:', err);

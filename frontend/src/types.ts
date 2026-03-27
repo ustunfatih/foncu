@@ -158,6 +158,7 @@ export interface OverlapResult {
     weights: Record<string, number>;
     fundCount: number;
   }>;
+  warnings?: string[];
 }
 
 export interface HoldingsScreenerResult {

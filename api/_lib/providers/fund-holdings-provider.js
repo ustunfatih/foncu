@@ -1,7 +1,32 @@
-const { fintablesQuery } = require('../fintables');
+const { fintablesQueryAll } = require('../fintables');
 const { upsertRows } = require('../sync-helpers');
 
-async function syncFundHoldings(log) {
+const HOLDINGS_SQL = `
+  WITH latest_reports AS (
+    SELECT DISTINCT ON (fon_kodu)
+      fon_portfoy_dagilim_raporu_id,
+      fon_kodu,
+      ay,
+      yil
+    FROM fon_portfoy_dagilim_raporlari
+    ORDER BY fon_kodu, yil DESC, ay DESC
+  )
+  SELECT
+    lr.fon_kodu,
+    sa.fon_kodu AS hisse_kodu,
+    sa.yuzdesel_agirlik,
+    sa.fondaki_lot,
+    lr.ay AS rapor_ay,
+    lr.yil AS rapor_yil
+  FROM latest_reports lr
+  JOIN fon_portfoy_dagilim_raporu_sembol_agirliklari sa
+    ON sa.fon_portfoy_dagilim_raporu_id = lr.fon_portfoy_dagilim_raporu_id
+  JOIN hisse_senetleri hs
+    ON hs.hisse_senedi_kodu = sa.fon_kodu
+  WHERE sa.yuzdesel_agirlik > 0
+  ORDER BY lr.fon_kodu, sa.yuzdesel_agirlik DESC`;
+
+async function syncFundHoldings(log, token) {
   log.push('Fetching fund holdings...');
 
   const [latestReportPeriod] = await fintablesQuery(`
@@ -89,9 +114,10 @@ async function syncFundHoldings(log) {
   };
 }
 
-async function syncKapEvents(log) {
+async function syncKapEvents(log, token) {
   log.push('Fetching KAP events...');
 
+  const { fintablesQuery } = require('../fintables');
   const today = new Date().toISOString().split('T')[0];
   const futureDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -106,7 +132,7 @@ async function syncKapEvents(log) {
     WHERE tarih_europe_istanbul BETWEEN '${today}' AND '${futureDate}'
       AND odendi = false
     ORDER BY tarih_europe_istanbul
-  `, 'syncing dividend events');
+  `, 'syncing dividend events', token);
 
   const kapEvents = dividendRows.map((row) => ({
     olay_tarihi: row.olay_tarihi,
