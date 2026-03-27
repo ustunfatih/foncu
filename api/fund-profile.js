@@ -3,6 +3,7 @@ const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { fetchFundHistory } = require('./_lib/history');
 const { calculateSharpeRatio, calculateVolatility, calculateMaxDrawdown } = require('./_lib/analytics');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
+const { enrichFundProfileFromPublicTefas } = require('./_lib/providers/fund-profiles-provider');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
@@ -25,6 +26,20 @@ module.exports = async (req, res) => {
           const error = new Error(`Fund ${code} not found in fund_profiles`);
           error.statusCode = 404;
           throw error;
+        }
+
+        let hydratedProfile = profile;
+        const needsPublicEnrichment = !profile.portfoy_yonetim_sirketi || !profile.fon_kategorisi || !profile.kap_link;
+
+        if (needsPublicEnrichment) {
+          try {
+            hydratedProfile = await enrichFundProfileFromPublicTefas(code, profile);
+            await supabase
+              .from('fund_profiles')
+              .upsert([hydratedProfile], { onConflict: 'fon_kodu' });
+          } catch {
+            hydratedProfile = profile;
+          }
         }
 
         const latestRapor = await resolveLatestCommonHoldingsPeriod([code]);
@@ -65,31 +80,31 @@ module.exports = async (req, res) => {
 
         return {
           payload: {
-            fon_kodu: profile.fon_kodu,
-            unvan: profile.unvan,
-            fon_tipi: profile.fon_tipi,
-            portfoy_yonetim_sirketi: profile.portfoy_yonetim_sirketi,
-            risk_seviyesi: profile.risk_seviyesi,
-            stopaj: profile.stopaj,
-            yonetim_ucreti: profile.yonetim_ucreti,
-            alis_valoru: profile.alis_valoru,
-            satis_valoru: profile.satis_valoru,
-            fon_kategorisi: profile.fon_kategorisi,
-            tefasa_acik: profile.tefasa_acik,
+            fon_kodu: hydratedProfile.fon_kodu,
+            unvan: hydratedProfile.unvan,
+            fon_tipi: hydratedProfile.fon_tipi,
+            portfoy_yonetim_sirketi: hydratedProfile.portfoy_yonetim_sirketi,
+            risk_seviyesi: hydratedProfile.risk_seviyesi,
+            stopaj: hydratedProfile.stopaj,
+            yonetim_ucreti: hydratedProfile.yonetim_ucreti,
+            alis_valoru: hydratedProfile.alis_valoru,
+            satis_valoru: hydratedProfile.satis_valoru,
+            fon_kategorisi: hydratedProfile.fon_kategorisi,
+            tefasa_acik: hydratedProfile.tefasa_acik,
             metriks: {
-              getiri_1y: profile.getiri_1y,
-              getiri_1a: profile.getiri_1a,
-              fon_buyuklugu: profile.fon_buyuklugu,
-              yatirimci_sayisi: profile.yatirimci_sayisi,
+              getiri_1y: hydratedProfile.getiri_1y,
+              getiri_1a: hydratedProfile.getiri_1a,
+              fon_buyuklugu: hydratedProfile.fon_buyuklugu,
+              yatirimci_sayisi: hydratedProfile.yatirimci_sayisi,
               sharpe,
               max_drawdown: maxDrawdown,
               volatilite: volatility,
             },
-            varlik_dagilimi: profile.varlik_dagilimi ?? [],
+            varlik_dagilimi: hydratedProfile.varlik_dagilimi ?? [],
             topHoldings,
             rapor: latestRapor,
           },
-          refreshedAt: profile.guncelleme_zamani || null,
+          refreshedAt: hydratedProfile.guncelleme_zamani || null,
         };
       }
     );

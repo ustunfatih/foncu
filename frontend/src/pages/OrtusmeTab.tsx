@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
 import { fetchOverlap } from '../api';
 import { OverlapResult } from '../types';
 
@@ -32,7 +32,7 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const [filterMin, setFilterMin] = useState(2);
+  const [minimumFundCount, setMinimumFundCount] = useState(2);
   const hasAutoAnalyzed = useRef(false);
 
   // Sync initialFunds prop into local state (P2 fix)
@@ -41,7 +41,8 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
     if (incoming && incoming !== selectedFunds.join(',')) {
       setSelectedFunds(initialFunds);
       setResult(null);
-      setFilterMin(2);
+      setMinimumFundCount(2);
+      setShowAll(false);
       hasAutoAnalyzed.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,8 +63,11 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
     setError(null);
     try {
       const data = await fetchOverlap(selectedFunds);
-      setResult(data);
-      setFilterMin(2);
+      startTransition(() => {
+        setResult(data);
+        setMinimumFundCount(2);
+        setShowAll(false);
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Analiz başarısız');
     } finally {
@@ -71,7 +75,6 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
     }
   };
 
-  // Auto-analyze when ≥2 funds are pre-populated (P3 fix)
   useEffect(() => {
     if (selectedFunds.length >= 2 && !result && !loading && !hasAutoAnalyzed.current) {
       hasAutoAnalyzed.current = true;
@@ -80,9 +83,8 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFunds.length, result]);
 
-  // Non-destructive filtering (P6 fix)
   const filteredHoldings = result
-    ? result.sharedHoldings.filter(h => h.fundCount >= filterMin)
+    ? result.sharedHoldings.filter((holding) => holding.fundCount >= minimumFundCount)
     : [];
   const visibleHoldings = showAll ? filteredHoldings : filteredHoldings.slice(0, 10);
 
@@ -97,8 +99,14 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
         </div>
       </div>
 
-      {/* Fund selector */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div
+        className="card"
+        style={{
+          marginBottom: 16,
+          border: '1px solid #d8e0eb',
+          background: 'linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%)',
+        }}
+      >
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <input
             className="input"
@@ -122,6 +130,22 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
           </button>
         </div>
 
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+            paddingTop: 12,
+            borderTop: '1px solid #edf1f7',
+            fontSize: 12,
+            color: '#6b7280',
+          }}
+        >
+          <span>Aylık KAP raporlarından türetilen hisse seviyesinde örtüşme analizi.</span>
+          <span>Karşılaştırma yalnızca ortak rapor ayı bulunan fonlar için yapılır.</span>
+        </div>
+
         {/* Fund tags */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {selectedFunds.map((code, i) => {
@@ -143,7 +167,11 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
         </div>
       </div>
 
-      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && (
+        <div className="error-banner" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
 
       {/* Warnings from backend (P5) */}
       {result?.warnings && result.warnings.length > 0 && (
@@ -157,7 +185,7 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
         <div className="card" style={{ textAlign: 'center', padding: 32, color: '#888' }}>
           <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 8px' }}>Veri bulunamadı</p>
           <p style={{ fontSize: 13, margin: 0 }}>
-            Seçili fonlar için holding verisi henüz mevcut değil. Veriler her gün otomatik güncellenir.
+            Seçili fonlar için holding verisi henüz mevcut değil. Veriler aylık KAP raporları geldikçe güncellenir.
           </p>
         </div>
       )}
@@ -166,8 +194,24 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
         <>
           {/* Report date */}
           {result.rapor.yil && (
-            <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8 }}>
-              Rapor: {result.rapor.ay}/{result.rapor.yil} · Ağırlıklı Jaccard benzerliği kullanılmaktadır
+            <div
+              style={{
+                marginBottom: 12,
+                padding: '10px 12px',
+                borderRadius: 12,
+                border: '1px solid #d9e3f0',
+                background: '#f7faff',
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+                fontSize: 12,
+                color: '#516173',
+              }}
+            >
+              <span>Rapor: {result.rapor.ay}/{result.rapor.yil}</span>
+              <span>Metodoloji: Ağırlıklı Jaccard benzerliği</span>
+              <span>Kaynak: {result.meta?.reportType === 'monthly_kap_snapshot' ? 'KAP aylık portföy raporu' : 'Aylık holdings snapshot'}</span>
             </div>
           )}
 
@@ -219,16 +263,20 @@ const OrtusmeTab = ({ initialFunds = [] }: Props) => {
           <div className="card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div className="section-title" style={{ margin: 0 }}>Ortak Hisseler ({filteredHoldings.length})</div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+              <div style={{ display: 'flex', gap: 8, fontSize: 11, flexWrap: 'wrap' }}>
                 {[2, 3, 4].map(n => (
                   selectedFunds.length >= n && (
-                    <button key={n} className="chip"
+                    <button
+                      key={n}
+                      className="chip"
                       style={{
                         fontSize: 10,
-                        background: filterMin === n ? '#ede9fe' : undefined,
-                        fontWeight: filterMin === n ? 700 : undefined,
+                        background: minimumFundCount === n ? '#e0e7ff' : undefined,
+                        borderColor: minimumFundCount === n ? '#a5b4fc' : undefined,
+                        color: minimumFundCount === n ? '#3730a3' : undefined,
                       }}
-                      onClick={() => setFilterMin(n)}>
+                      onClick={() => setMinimumFundCount(n)}
+                    >
                       {n}+ Fon
                     </button>
                   )

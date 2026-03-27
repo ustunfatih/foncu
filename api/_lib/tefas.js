@@ -1,6 +1,7 @@
 const ROOT_URL = 'https://fundturkey.com.tr';
 const DETAIL_ENDPOINT = '/api/DB/BindHistoryAllocation';
 const INFO_ENDPOINT = '/api/DB/BindHistoryInfo';
+const ANALYZE_URL = 'https://www.tefas.gov.tr/api/DB/GetAllFundAnalyzeData';
 
 const defaultHeaders = {
   Connection: 'keep-alive',
@@ -76,14 +77,42 @@ const fetchInfo = async ({ start, end, code = '', kind = 'YAT', cookie }) =>
 const fetchAllocation = async ({ start, end, code = '', kind = 'YAT', cookie }) =>
   doPost(DETAIL_ENDPOINT, { fontip: kind, bastarih: start, bittarih: end, fonkod: code.toUpperCase() }, cookie);
 
+const fetchAnalyzeData = async (code) => {
+  const normalizedCode = (code || '').toString().trim().toUpperCase();
+  if (!normalizedCode) {
+    throw new Error('fund code is required for TEFAS analyze data');
+  }
+
+  const response = await fetch(ANALYZE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
+      'User-Agent': defaultHeaders['User-Agent'],
+      Accept: 'application/json, text/plain, */*',
+    },
+    body: new URLSearchParams({
+      dil: 'TR',
+      fonkod: normalizedCode,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`TEFAS analyze request failed: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+};
+
 module.exports = {
   ROOT_URL,
   DETAIL_ENDPOINT,
   INFO_ENDPOINT,
+  ANALYZE_URL,
   defaultHeaders,
   formatDate,
   toISO,
   bootstrapSession,
   fetchInfo,
   fetchAllocation,
+  fetchAnalyzeData,
 };

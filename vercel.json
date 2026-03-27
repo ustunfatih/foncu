@@ -3,10 +3,6 @@
     {
       "path": "/api/sync-fintables-daily",
       "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/sync-fund-holdings-monthly",
-      "schedule": "0 10 10 * *"
     }
   ],
   "functions": {
@@ -23,10 +19,6 @@
     {
       "source": "/api/sync-fintables-daily",
       "destination": "/api/sync-fintables?phase=daily"
-    },
-    {
-      "source": "/api/sync-fund-holdings-monthly",
-      "destination": "/api/sync-fintables?phase=holdings"
     },
     {
       "source": "/api/:path*",

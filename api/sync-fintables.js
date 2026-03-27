@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
 
     const shouldRunProfiles = phase === 'all' || phase === 'profiles' || phase === 'daily';
     const shouldRunMetrics = phase === 'all' || phase === 'metrics' || phase === 'daily';
-    const shouldRunHoldings = phase === 'all' || phase === 'holdings';
+    const shouldRunHoldings = phase === 'holdings';
     const shouldRunEvents = phase === 'all' || phase === 'events' || phase === 'daily';
 
     if (shouldRunProfiles) {
@@ -79,6 +79,8 @@ module.exports = async (req, res) => {
       const holdingResult = await syncFundHoldings(log, fintablesToken);
       summary.holdingCount = holdingResult.holdingCount;
       summary.holdingsReportPeriod = holdingResult.reportPeriod ?? null;
+    } else if (phase === 'all' || phase === 'daily') {
+      log.push('Monthly holdings sync is handled outside Vercel by the KAP workflow.');
     }
 
     if (shouldRunEvents) {
@@ -103,7 +105,7 @@ module.exports = async (req, res) => {
     });
   } catch (err) {
     console.error('[sync-fintables] Error:', err);
-    return res.status(500).json({
+    return res.status(err.statusCode || 500).json({
       ok: false,
       error: err.message,
       log,

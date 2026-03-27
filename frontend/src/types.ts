@@ -159,6 +159,10 @@ export interface OverlapResult {
     fundCount: number;
   }>;
   warnings?: string[];
+  meta?: {
+    source?: string;
+    reportType?: string;
+  };
 }
 
 export interface HoldingsScreenerResult {
@@ -184,4 +188,3 @@ export interface PortfolioExposure {
     byFund: Record<string, { fundWeight: number; contribution: number }>;
   }>;
 }
-
