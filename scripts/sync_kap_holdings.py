@@ -735,27 +735,6 @@ def persist_batch(
     final: bool,
     has_failures: bool,
 ) -> None:
-    mapping_rows = [
-        {
-            "fon_kodu": result["fund_code"],
-            "kap_link": result["kap_link"],
-            "kap_fund_id": result["kap_fund_id"],
-            "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        }
-        for result in batch_results
-        if result.get("kap_link") and result.get("kap_fund_id")
-    ]
-
-    if mapping_rows:
-        deduped_mapping_rows = list({row["fon_kodu"]: row for row in mapping_rows}.values())
-        supabase_upsert(
-            supabase_url,
-            supabase_key,
-            "fund_profiles",
-            deduped_mapping_rows,
-            "fon_kodu",
-        )
-
     if batch_holdings:
         supabase_upsert(
             supabase_url,
@@ -779,6 +758,37 @@ def persist_batch(
         ),
         "rapor_yil,rapor_ay",
     )
+
+    mapping_rows = [
+        {
+            "fon_kodu": result["fund_code"],
+            "kap_link": result["kap_link"],
+            "kap_fund_id": result["kap_fund_id"],
+            "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        }
+        for result in batch_results
+        if result.get("kap_link") and result.get("kap_fund_id")
+    ]
+
+    if mapping_rows:
+        deduped_mapping_rows = list({row["fon_kodu"]: row for row in mapping_rows}.values())
+        try:
+            supabase_upsert(
+                supabase_url,
+                supabase_key,
+                "fund_profiles",
+                deduped_mapping_rows,
+                "fon_kodu",
+            )
+        except requests.HTTPError as exc:
+            detail = ""
+            if exc.response is not None:
+                detail = exc.response.text[:500]
+            print(
+                f"[warn] failed to update KAP mappings for {len(deduped_mapping_rows)} fund(s): "
+                f"{exc}{f' :: {detail}' if detail else ''}",
+                flush=True,
+            )
 
 
 def sync_single_fund(profile: dict[str, Any], target_year: int, target_month: int, days: int) -> dict[str, Any]:
