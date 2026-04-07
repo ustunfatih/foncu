@@ -1,5 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: "Geist", "Inter", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-pixel: "Geist Pixel", "Geist Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --bg: #f6f7ff;
+  --bg-elevated: #ffffff;
+  --surface: #ffffffd9;
+  --surface-strong: #ffffff;
+  --text: #141b34;
+  --text-muted: #5f6b93;
+  --border: #dfe5ff;
+  --primary: #5b68ff;
+  --primary-soft: #e8ebff;
+  --accent: #00c2ff;
+  --success: #00a96b;
+  --warning: #d98b00;
+  --danger: #dc335f;
+  --shadow: 0 12px 30px rgba(39, 55, 130, 0.12);
+  --radius: 14px;
+
+  font-family: var(--font-body);
   line-height: 1.6;
   font-weight: 400;
   color: #1a1a1a;
@@ -188,7 +211,7 @@ body {
   padding: 10px 16px;
   border-radius: 8px;
   border: none;
-  background: #2d3748;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
   color: #ffffff;
   cursor: pointer;
   font-weight: 600;
@@ -200,13 +223,13 @@ body {
 }
 
 .github-login-btn:hover {
-  background: #1a202c;
+  filter: brightness(1.05);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow);
 }
 
 .github-login-btn:disabled {
-  background: #94a3b8;
+  background: #95a1d6;
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
@@ -283,6 +306,8 @@ body {
   color: var(--badge-text);
   font-weight: 700;
   font-size: 12px;
+  font-family: var(--font-pixel);
+  letter-spacing: 0.02em;
 }
 
 .badge-danger {

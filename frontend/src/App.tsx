@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FundSelector from './components/FundSelector';
 import FundCard from './components/FundCard';
 import PerformanceChart from './components/PerformanceChart';
@@ -99,6 +99,8 @@ const App = () => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const hasUserTouchedSelectionRef = useRef(false);
+  const hasHydratedPortfolioRef = useRef(false);
   const { user, signInWithGithub, signOut } = useAuth();
   const isAuthEnabled = isSupabaseConfigured;
 
@@ -123,18 +125,26 @@ const App = () => {
   // Load portfolio from Supabase on login
   useEffect(() => {
     if (!isAuthEnabled || !user) return;
+    hasHydratedPortfolioRef.current = false;
+
     const loadPortfolio = async () => {
       const { data } = await supabase
         .from('portfolios')
         .select('fund_list')
         .eq('user_id', user.id)
         .single();
-      if (data?.fund_list && Array.isArray(data.fund_list)) {
+
+      if (hasHydratedPortfolioRef.current || hasUserTouchedSelectionRef.current) {
+        return;
+      }
+
+      if (data?.fund_list && Array.isArray(data.fund_list) && selectedCodes.length === 0) {
         setSelectedCodes(data.fund_list);
       }
+      hasHydratedPortfolioRef.current = true;
     };
     loadPortfolio();
-  }, [isAuthEnabled, user]);
+  }, [isAuthEnabled, user, selectedCodes.length]);
 
   // Persist selected codes to localStorage on every change
   useEffect(() => {
@@ -229,12 +239,14 @@ const App = () => {
   }, [selectedCodes, activeTimeFilter.days, activeMetric.key, refreshKey]);
 
   const handleConfirmFundKind = useCallback(() => {
+    hasUserTouchedSelectionRef.current = true;
     setFundKind(pendingFundKind);
     setSelectedCodes([]);
     setSelectedFunds([]);
   }, [pendingFundKind]);
 
   const handleFundSelect = useCallback((fund: FundSummary) => {
+    hasUserTouchedSelectionRef.current = true;
     setSelectedCodes((prev) =>
       prev.some(s => s.code === fund.code)
         ? prev.filter((s) => s.code !== fund.code)
@@ -245,7 +257,15 @@ const App = () => {
   }, []);
 
   const handleRemoveFund = useCallback((code: string) => {
+    hasUserTouchedSelectionRef.current = true;
     setSelectedCodes(prev => prev.filter(s => s.code !== code));
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    hasUserTouchedSelectionRef.current = true;
+    setSelectedCodes([]);
+    setSelectedFunds([]);
+    setProfileDrawerCode(null);
   }, []);
 
   const handleRefresh = useCallback(() => {
@@ -479,6 +499,14 @@ const App = () => {
                   style={{ marginLeft: 8, opacity: pendingFundKind === fundKind ? 0.45 : 1 }}
                 >
                   {loadingFunds ? 'Yükleniyor...' : 'Fonları Yükle'}
+                </button>
+                <button
+                  className="chip badge-danger"
+                  onClick={handleClearSelection}
+                  disabled={selectedCodes.length === 0 && selectedFunds.length === 0}
+                  style={{ marginLeft: 8 }}
+                >
+                  Seçimi Temizle
                 </button>
               </div>
             </div>

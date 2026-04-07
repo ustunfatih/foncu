@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
 @font-face {
   font-family: "Apercu";
   src: url("../brand/Apercu-Light.otf") format("opentype");
@@ -99,11 +101,9 @@
   --radius-xl: 24px;
   --radius-lg: 18px;
   --radius-md: 14px;
-  --font-display: "Apercu", "Geist", "Inter", "Avenir Next", "Helvetica Neue",
-    sans-serif;
-  --font-body: "Apercu", "Geist", "Inter", "Avenir Next", "Helvetica Neue",
-    sans-serif;
-  --font-mono: "Apercu Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+  --font-display: "Geist", "Inter", "Apercu", "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-body: "Inter", "Geist", "Apercu", "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", "Apercu Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
   font-family: var(--font-body);
   line-height: 1.5;
   font-weight: 500;
@@ -137,6 +137,21 @@
   --shadow-soft: 0 12px 24px rgba(2, 6, 23, 0.35);
   --shadow-nav: 0 20px 40px rgba(2, 6, 23, 0.5);
   --shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --warm-700: #f7f4ef;
+    --warm-100: #0d1224;
+    --white: #151d37;
+    --ink: #f3f6ff;
+    --shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  body {
+    background: radial-gradient(circle at top, #151c35 0%, #10172c 40%, #0d1224 100%);
+  }
 }
 
 * {

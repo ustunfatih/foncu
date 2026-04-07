@@ -35,6 +35,7 @@ VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
 SUPABASE_URL=<your-supabase-url>
 SUPABASE_ANON_KEY=<your-supabase-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-supabase-service-role-key>
+CRON_SECRET=<long-random-secret-for-sync-auth>
 ```
 
 **Note:** Get these values from your `.env` file or Supabase Dashboard → Project Settings → API
@@ -66,8 +67,31 @@ The `vercel.json` file configures:
 - Build command: `npm run build`
 - Output directory: `frontend/dist`
 - API rewrites for serverless functions
+- Security headers (including CSP)
 
-### 5. Testing Deployment
+For CSP ownership, safe change workflow, and regression checks, see `docs/CSP_POLICY.md`.
+
+### 5. Secure manual sync invocation (headers only)
+`/api/sync-fintables` only accepts bearer authentication via the `Authorization` header.
+
+Use `POST` for manual runs:
+
+```bash
+curl -X POST "https://<your-vercel-app>.vercel.app/api/sync-fintables-manual?phase=metrics" \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Optional one-time Fintables override token (header-only):
+
+```bash
+curl -X POST "https://<your-vercel-app>.vercel.app/api/sync-fintables-manual?phase=holdings" \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "x-fintables-token: $FINTABLES_ONE_TIME_TOKEN"
+```
+
+Do not pass secrets/tokens in query parameters.
+
+### 6. Testing Deployment
 
 After deployment, test:
 1. **Homepage loads**: Should show fund dashboard
@@ -75,7 +99,7 @@ After deployment, test:
 3. **API endpoints**: `/api/funds?kind=YAT` should return data
 4. **Export page**: Date column should be pre-selected
 
-### 6. Common Issues
+### 7. Common Issues
 
 **Issue**: "GitHub login redirects to wrong Supabase URL"
 - **Cause**: Old environment variables cached
@@ -110,6 +134,16 @@ Visit: `https://your-vercel-app.vercel.app/test-env.html`
 Visit: `https://your-vercel-app.vercel.app/api/funds?kind=YAT`
 - Should return JSON with ~1983 funds
 - Should NOT return errors
+
+### 5. Test secure sync endpoint
+Run:
+```bash
+curl -i -X POST "https://<your-vercel-app>.vercel.app/api/sync-fintables-manual?phase=metrics" \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+- Should return `200` when auth is valid
+- Should return `401` if bearer token is missing/invalid
+- Should return `405` for non-POST manual requests
 
 ## Deployment Checklist
 
