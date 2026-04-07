@@ -1,11 +1,14 @@
+const HOLDINGS_UNSUPPORTED_REASON =
+  'Monthly holdings sync is handled by scripts/sync_kap_holdings.py and the GitHub Actions workflow.';
+
 async function syncFundHoldings(log) {
   log.push('Monthly fund holdings sync is handled by the KAP workflow, not by Vercel runtime.');
-
-  const error = new Error(
-    'Monthly holdings sync is handled by scripts/sync_kap_holdings.py and the GitHub Actions workflow.'
-  );
-  error.statusCode = 501;
-  throw error;
+  return {
+    supported: false,
+    reason: HOLDINGS_UNSUPPORTED_REASON,
+    holdingCount: 0,
+    reportPeriod: null,
+  };
 }
 
 async function syncKapEvents(log) {
@@ -14,6 +17,7 @@ async function syncKapEvents(log) {
 }
 
 module.exports = {
+  HOLDINGS_UNSUPPORTED_REASON,
   syncFundHoldings,
   syncKapEvents,
 };

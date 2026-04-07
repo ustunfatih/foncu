@@ -22,6 +22,8 @@ jest.mock('../_lib/providers/fund-history-provider', () => ({
 }));
 
 jest.mock('../_lib/providers/fund-holdings-provider', () => ({
+  HOLDINGS_UNSUPPORTED_REASON:
+    'Monthly holdings sync is handled by scripts/sync_kap_holdings.py and the GitHub Actions workflow.',
   syncFundHoldings: (...args) => syncFundHoldings(...args),
   syncKapEvents: (...args) => syncKapEvents(...args),
 }));
@@ -88,6 +90,14 @@ test('runs the full sync and returns summary details', async () => {
   expect(syncKapEvents).toHaveBeenCalled();
   expect(res.payload.summary.coverage.fundsWithYtd).toBe(1);
   expect(res.payload.log).toContain('Monthly holdings sync is handled outside Vercel by the KAP workflow.');
+  expect(res.payload.summary.skippedModules).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        module: 'holdings',
+        supported: false,
+      }),
+    ])
+  );
 });
 
 test('supports metrics-only backfill mode', async () => {
@@ -122,15 +132,22 @@ test('keeps monthly holdings sync as an explicit external phase', async () => {
   const req = { headers: {}, query: { secret: 'test-secret', phase: 'holdings' } };
   const res = createRes();
 
-  syncFundHoldings.mockRejectedValueOnce(Object.assign(new Error('Monthly holdings sync is handled by scripts/sync_kap_holdings.py and the GitHub Actions workflow.'), { statusCode: 501 }));
-
   await handler(req, res);
 
   expect(res.statusCode).toBe(501);
+  expect(res.payload.error).toContain('scripts/sync_kap_holdings.py');
   expect(syncFundProfiles).not.toHaveBeenCalled();
   expect(syncFundAllocations).not.toHaveBeenCalled();
   expect(syncFundMetrics).not.toHaveBeenCalled();
-  expect(syncFundHoldings).toHaveBeenCalled();
+  expect(syncFundHoldings).not.toHaveBeenCalled();
+  expect(res.payload.summary.skippedModules).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        module: 'holdings',
+        supported: false,
+      }),
+    ])
+  );
 });
 
 test('can backfill missing historical data before metrics refresh', async () => {
