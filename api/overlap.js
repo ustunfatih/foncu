@@ -1,18 +1,15 @@
 const supabase = require('./_lib/supabase');
 const { groupByFund, buildMatrix } = require('./_lib/overlap-calc');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
+  if (!ensureSupabase(res)) return;
 
   try {
-    if (!supabase) {
-      return res.status(503).json({ error: 'Database not configured' });
-    }
-
     const { funds: fundsParam } = req.query;
     if (!fundsParam) return res.status(400).json({ error: 'funds param required' });
-    if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
 
     const fundCodes = fundsParam.split(',').map(s => s.trim().toUpperCase()).slice(0, 5);
     if (fundCodes.length < 2) return res.status(400).json({ error: 'At least 2 funds required' });

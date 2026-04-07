@@ -1,9 +1,10 @@
 const supabase = require('./_lib/supabase');
 const { fetchLatestPriceBatch } = require('./_lib/history');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 async function handleValuation(req, res) {
-  if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+  if (!ensureSupabase(res)) return;
 
   let body = req.body;
   if (typeof req.body === 'string') {
@@ -63,7 +64,7 @@ async function handleValuation(req, res) {
 }
 
 async function handleExposure(req, res) {
-  if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
+  if (!ensureSupabase(res)) return;
 
   const { holdings } = req.body;
   if (!Array.isArray(holdings) || !holdings.length) {

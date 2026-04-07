@@ -1,7 +1,9 @@
 const supabase = require('./_lib/supabase');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
+  if (!ensureSupabase(res)) return;
 
   try {
     const { start, end, type } = req.query;

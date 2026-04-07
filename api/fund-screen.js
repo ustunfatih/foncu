@@ -1,6 +1,7 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { hydrateFundMetricRows } = require('./_lib/providers/fund-metrics-provider');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 function applyMinReturnFilter(rows, key, threshold) {
   if (threshold === undefined) return rows;
@@ -10,6 +11,7 @@ function applyMinReturnFilter(rows, key, threshold) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
+  if (!ensureSupabase(res)) return;
 
   try {
     const {

@@ -1,5 +1,6 @@
 const { bootstrapSession, fetchAllocation, fetchInfo, formatDate, toISO } = require('./_lib/tefas');
 const supabase = require('./_lib/supabase');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 const FIVE_YEARS_IN_DAYS = 365 * 5;
 
@@ -29,6 +30,8 @@ const buildAllocation = (row = {}) => {
 };
 
 module.exports = async function handler(req, res) {
+  if (!ensureSupabase(res)) return;
+
   try {
     const code = (req.query.code || '').toString().trim().toUpperCase();
     const kind = (req.query.kind || 'YAT').toString().toUpperCase();
@@ -61,36 +64,34 @@ module.exports = async function handler(req, res) {
     let cachedData = [];
     let fundTitle = '';
 
-    if (supabase) {
-      // Fetch fund metadata to get title
-      const { data: fundData } = await supabase
-        .from('funds')
-        .select('title')
-        .eq('code', code)
-        .single();
+    // Fetch fund metadata to get title
+    const { data: fundData } = await supabase
+      .from('funds')
+      .select('title')
+      .eq('code', code)
+      .single();
 
-      if (fundData) {
-        fundTitle = fundData.title;
-      }
+    if (fundData) {
+      fundTitle = fundData.title;
+    }
 
-      const { data, error } = await supabase
-        .from('historical_data')
-        .select('*')
-        .eq('fund_code', code)
-        .gte('date', startDate.toISOString().split('T')[0])
-        .lte('date', endDate.toISOString().split('T')[0])
-        .order('date', { ascending: true });
+    const { data, error } = await supabase
+      .from('historical_data')
+      .select('*')
+      .eq('fund_code', code)
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', endDate.toISOString().split('T')[0])
+      .order('date', { ascending: true });
 
-      if (!error && data) {
-        cachedData = data.map(d => ({
-          TARIH: new Date(d.date).getTime().toString(),
-          FIYAT: d.price,
-          PORTFOYBUYUKLUK: d.market_cap,
-          KISISAYISI: d.investor_count,
-          FONUNVAN: fundTitle
-        }));
-        console.log(`[Cache] Found ${cachedData.length} records in Supabase for ${code}`);
-      }
+    if (!error && data) {
+      cachedData = data.map(d => ({
+        TARIH: new Date(d.date).getTime().toString(),
+        FIYAT: d.price,
+        PORTFOYBUYUKLUK: d.market_cap,
+        KISISAYISI: d.investor_count,
+        FONUNVAN: fundTitle
+      }));
+      console.log(`[Cache] Found ${cachedData.length} records in Supabase for ${code}`);
     }
 
     // 2. Check if cache covers the FULL requested range
@@ -150,7 +151,7 @@ module.exports = async function handler(req, res) {
       }
 
       // 3. Sync ALL data back to Supabase (including fund metadata)
-      if (supabase && info.length > 0) {
+      if (info.length > 0) {
         // Sync fund metadata
         const { error: fundError } = await supabase.from('funds').upsert({
           code,

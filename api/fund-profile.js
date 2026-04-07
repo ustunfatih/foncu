@@ -4,9 +4,11 @@ const { fetchFundHistory } = require('./_lib/history');
 const { calculateSharpeRatio, calculateVolatility, calculateMaxDrawdown } = require('./_lib/analytics');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
 const { enrichFundProfileFromPublicTefas } = require('./_lib/providers/fund-profiles-provider');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
+  if (!ensureSupabase(res)) return;
 
   try {
     const code = req.query.code?.toUpperCase();

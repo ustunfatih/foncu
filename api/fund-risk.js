@@ -1,5 +1,5 @@
-const supabase = require('./_lib/supabase');
 const { fetchFundHistory } = require('./_lib/history');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 const {
   calculateSharpeRatio,
   calculateVolatility,
@@ -17,10 +17,9 @@ const getDateOffset = (days) => {
 };
 
 module.exports = async function handler(req, res) {
+  if (!ensureSupabase(res)) return;
+
   try {
-    if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' });
-    }
     const code = (req.query.code || '').toString().trim().toUpperCase();
     const days = Number(req.query.days) || 365;
     if (!code) {

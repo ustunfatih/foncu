@@ -1,9 +1,11 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { resolveLatestPublishedHoldingsPeriod } = require('./_lib/holdings-periods');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
+  if (!ensureSupabase(res)) return;
 
   try {
     const { ticker, minWeight = 0, fundType = 'mutual', limit = 50 } = req.query;
