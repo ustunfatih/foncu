@@ -7,16 +7,25 @@ const { invalidateCacheByPrefix } = require('./_lib/cache');
 const CRON_SECRET = process.env.CRON_SECRET;
 
 module.exports = async (req, res) => {
-  // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+  const requestMethod = (req.method || 'GET').toString().toUpperCase();
+  const isVercelCronRequest = ['1', 'true'].includes(String(req.headers['x-vercel-cron']).toLowerCase());
+  const isManualPost = requestMethod === 'POST';
+
+  if (!isManualPost && !(requestMethod === 'GET' && isVercelCronRequest)) {
+    return res.status(405).json({
+      error: 'Method Not Allowed. Use POST for manual runs.',
+    });
+  }
+
+  // Vercel cron/manual callers must send Authorization: Bearer <CRON_SECRET>
   const bearerToken = (req.headers['authorization'] || '').replace('Bearer ', '');
   const isVercelCron = !!CRON_SECRET && bearerToken === CRON_SECRET;
-  const isManual = !!CRON_SECRET && req.query.secret === CRON_SECRET;
-  if (!isVercelCron && !isManual) {
+  if (!isVercelCron) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const phase = (req.query.phase || 'all').toString().toLowerCase();
-  const fintablesToken = req.query.token || undefined; // optional one-time token override
+  const fintablesToken = req.headers['x-fintables-token'] || undefined; // optional one-time token override
   const shouldBackfillMissingHistory =
     req.query.backfillMissingHistory === '1' || req.query.backfillMissingHistory === 'true';
   const log = [];
@@ -104,7 +113,10 @@ module.exports = async (req, res) => {
       log,
     });
   } catch (err) {
-    console.error('[sync-fintables] Error:', err);
+    console.error('[sync-fintables] Error:', {
+      message: err.message,
+      statusCode: err.statusCode || 500,
+    });
     return res.status(err.statusCode || 500).json({
       ok: false,
       error: err.message,
