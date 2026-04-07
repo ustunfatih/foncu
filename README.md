@@ -170,6 +170,33 @@ Returns historical data for a specific fund.
 - `kind`: Fund type (YAT, EMK, BYF)
 - `days`: Number of days or 'ybb' for year-to-date
 
+### `POST /api/sync-fintables`
+Triggers Fintables sync phases on demand.
+
+**Authentication (required):**
+- `Authorization: Bearer <CRON_SECRET>`
+
+**Optional header:**
+- `x-fintables-token: <one-time-token>` (override token used only for this request)
+
+**Important security notes:**
+- Query-based auth (`?secret=...`) is not supported.
+- Query-based Fintables token override (`?token=...`) is not supported.
+- Use headers for all secrets/tokens.
+
+**Example manual invocation:**
+```bash
+curl -X POST "https://<your-vercel-domain>/api/sync-fintables-manual?phase=metrics" \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+**Example holdings/event run with one-time override token:**
+```bash
+curl -X POST "https://<your-vercel-domain>/api/sync-fintables-manual?phase=holdings" \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "x-fintables-token: $FINTABLES_ONE_TIME_TOKEN"
+```
+
 ## 🎯 Usage
 
 1. **Select Fund Type**: Choose between YAT, EMK, or BYF
