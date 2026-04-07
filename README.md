@@ -170,32 +170,19 @@ Returns historical data for a specific fund.
 - `kind`: Fund type (YAT, EMK, BYF)
 - `days`: Number of days or 'ybb' for year-to-date
 
-### `POST /api/sync-fintables`
-Triggers Fintables sync phases on demand.
+### `GET /api/sync-fintables?secret={CRON_SECRET}&phase={PHASE}`
+Triggers a protected Fintables sync phase for operational refresh jobs.
 
-**Authentication (required):**
-- `Authorization: Bearer <CRON_SECRET>`
+**Supported phases in Vercel runtime:** `all`, `daily`, `profiles`, `metrics`, `events`  
+**Unsupported in Vercel runtime:** `holdings` (returns a clear `501` response and does not start sync work).
 
-**Optional header:**
-- `x-fintables-token: <one-time-token>` (override token used only for this request)
+Monthly holdings are synchronized outside Vercel via:
 
-**Important security notes:**
-- Query-based auth (`?secret=...`) is not supported.
-- Query-based Fintables token override (`?token=...`) is not supported.
-- Use headers for all secrets/tokens.
-
-**Example manual invocation:**
 ```bash
-curl -X POST "https://<your-vercel-domain>/api/sync-fintables-manual?phase=metrics" \
-  -H "Authorization: Bearer $CRON_SECRET"
+python scripts/sync_kap_holdings.py
 ```
 
-**Example holdings/event run with one-time override token:**
-```bash
-curl -X POST "https://<your-vercel-domain>/api/sync-fintables-manual?phase=holdings" \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  -H "x-fintables-token: $FINTABLES_ONE_TIME_TOKEN"
-```
+Use the GitHub Actions workflow that runs `scripts/sync_kap_holdings.py` for production holdings refreshes.
 
 ## 🎯 Usage
 

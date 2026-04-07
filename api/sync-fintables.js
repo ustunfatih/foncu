@@ -1,7 +1,11 @@
 const { syncFundProfiles, syncFundAllocations } = require('./_lib/providers/fund-profiles-provider');
 const { syncFundMetrics } = require('./_lib/providers/fund-metrics-provider');
 const { backfillMissingMetricHistory } = require('./_lib/providers/fund-history-provider');
-const { syncFundHoldings, syncKapEvents } = require('./_lib/providers/fund-holdings-provider');
+const {
+  HOLDINGS_UNSUPPORTED_REASON,
+  syncFundHoldings,
+  syncKapEvents,
+} = require('./_lib/providers/fund-holdings-provider');
 const { invalidateCacheByPrefix } = require('./_lib/cache');
 
 const CRON_SECRET = process.env.CRON_SECRET;
@@ -32,6 +36,32 @@ module.exports = async (req, res) => {
   const startedAt = Date.now();
 
   try {
+    if (phase === 'holdings') {
+      const elapsed = Date.now() - startedAt;
+      const summary = {
+        phase,
+        profileCount: 0,
+        allocationCount: 0,
+        metricCount: 0,
+        holdingCount: 0,
+        kapEventCount: 0,
+        skippedModules: [],
+      };
+      summary.skippedModules.push({
+        module: 'holdings',
+        supported: false,
+        reason: HOLDINGS_UNSUPPORTED_REASON,
+      });
+      log.push(HOLDINGS_UNSUPPORTED_REASON);
+      return res.status(501).json({
+        ok: false,
+        error: HOLDINGS_UNSUPPORTED_REASON,
+        elapsed,
+        summary,
+        log,
+      });
+    }
+
     let profiles = [];
     const summary = {
       phase,
@@ -54,12 +84,17 @@ module.exports = async (req, res) => {
         insertedHistoryRowCount: 0,
         skippedFundCount: 0,
       },
+      skippedModules: [],
     };
 
     const shouldRunProfiles = phase === 'all' || phase === 'profiles' || phase === 'daily';
     const shouldRunMetrics = phase === 'all' || phase === 'metrics' || phase === 'daily';
-    const shouldRunHoldings = phase === 'holdings';
+    const shouldRunHoldings = false;
     const shouldRunEvents = phase === 'all' || phase === 'events' || phase === 'daily';
+
+    const markSkippedModule = (module, reason, supported = false) => {
+      summary.skippedModules.push({ module, supported, reason });
+    };
 
     if (shouldRunProfiles) {
       const profileResult = await syncFundProfiles(log);
@@ -70,6 +105,9 @@ module.exports = async (req, res) => {
     if (shouldRunProfiles) {
       const allocationResult = await syncFundAllocations(log);
       summary.allocationCount = allocationResult.allocationCount;
+    } else {
+      markSkippedModule('profiles', `Phase "${phase}" does not include profile sync.`, true);
+      markSkippedModule('allocations', `Phase "${phase}" does not include allocation sync.`, true);
     }
 
     if (shouldRunMetrics) {
@@ -83,18 +121,29 @@ module.exports = async (req, res) => {
         log.push('Manual metrics-only refresh can be used as a backfill for existing funds.');
       }
     }
+    if (!shouldRunMetrics) {
+      markSkippedModule('metrics', `Phase "${phase}" does not include metrics sync.`, true);
+    }
 
     if (shouldRunHoldings) {
       const holdingResult = await syncFundHoldings(log, fintablesToken);
-      summary.holdingCount = holdingResult.holdingCount;
+      summary.holdingCount = holdingResult.holdingCount ?? 0;
       summary.holdingsReportPeriod = holdingResult.reportPeriod ?? null;
+      if (holdingResult.supported === false) {
+        markSkippedModule('holdings', holdingResult.reason || HOLDINGS_UNSUPPORTED_REASON, false);
+      }
     } else if (phase === 'all' || phase === 'daily') {
       log.push('Monthly holdings sync is handled outside Vercel by the KAP workflow.');
+      markSkippedModule('holdings', HOLDINGS_UNSUPPORTED_REASON, false);
+    } else {
+      markSkippedModule('holdings', `Phase "${phase}" does not include holdings sync.`, true);
     }
 
     if (shouldRunEvents) {
       const kapResult = await syncKapEvents(log, fintablesToken);
       summary.kapEventCount = kapResult.kapEventCount;
+    } else {
+      markSkippedModule('events', `Phase "${phase}" does not include event sync.`, true);
     }
 
     invalidateCacheByPrefix('funds:');
