@@ -31,7 +31,15 @@ const FundCard = ({ fund, onRemove, color }: Props) => {
             </span>
           )}
         </div>
-        <button className="remove-btn" onClick={() => onRemove(fund.code)}>×</button>
+        <button
+          className="remove-btn"
+          onClick={(event) => {
+            event.stopPropagation();
+            onRemove(fund.code);
+          }}
+        >
+          ×
+        </button>
       </div>
 
       {latestPrice !== null && (
