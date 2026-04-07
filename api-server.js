@@ -1,34 +1,95 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
-
-const app = express();
-app.use(express.json());
 
 // Set up env variables if needed
 require('dotenv').config();
 
-// Dynamic loader for Vercel functions
-app.use('/api', async (req, res) => {
-  // req.path will be like "/overlap" or "/fund-profile" since it's mounted on /api
-  const fileRoute = req.path.replace(/^\//, ''); 
-  const jsPath = path.join(__dirname, 'api', fileRoute + '.js');
+const API_ROOT = path.resolve(__dirname, 'api');
 
-  if (fs.existsSync(jsPath)) {
+const ROUTE_MODULES = {
+  'fund-history': './api/fund-history',
+  'fund-profile': './api/fund-profile',
+  'fund-risk': './api/fund-risk',
+  'fund-screen': './api/fund-screen',
+  'fund-technical-scan': './api/fund-technical-scan',
+  funds: './api/funds',
+  'holdings-screener': './api/holdings-screener',
+  'macro-series': './api/macro-series',
+  'market-events': './api/market-events',
+  overlap: './api/overlap',
+  portfolio: './api/portfolio',
+  'sync-fintables': './api/sync-fintables'
+};
+
+function resolveApiRoute(rawRoute) {
+  const incomingRoute = rawRoute || '/';
+  const normalizedRoute = path.posix.normalize(incomingRoute);
+
+  const incomingRouteName = incomingRoute.replace(/^\/+/, '');
+  const routeName = normalizedRoute.replace(/^\/+/, '');
+
+  if (
+    incomingRouteName.includes('..') ||
+    incomingRouteName.startsWith('.') ||
+    routeName.includes('..') ||
+    routeName.startsWith('.') ||
+    routeName.includes('/') ||
+    routeName.includes('\\')
+  ) {
+    return { error: 400, message: 'Malformed API route.' };
+  }
+
+  if (!routeName) {
+    return { error: 404, message: 'API route not found' };
+  }
+
+  const moduleRef = ROUTE_MODULES[routeName];
+  if (!moduleRef) {
+    return { error: 404, message: 'API route not found' };
+  }
+
+  const resolvedPath = path.resolve(__dirname, moduleRef + '.js');
+  const isInsideApiRoot =
+    resolvedPath === API_ROOT || resolvedPath.startsWith(`${API_ROOT}${path.sep}`);
+
+  if (!isInsideApiRoot) {
+    return { error: 400, message: 'Malformed API route.' };
+  }
+
+  return {
+    routeName,
+    handler: require(moduleRef)
+  };
+}
+
+function createApp() {
+  const app = express();
+  app.use(express.json());
+
+  // Static allowlisted loader for Vercel-like functions
+  app.use('/api', async (req, res) => {
+    const routeResult = resolveApiRoute(req.path);
+
+    if (routeResult.error) {
+      return res.status(routeResult.error).json({ error: routeResult.message });
+    }
+
     try {
-      const handler = require(jsPath);
-      // Express mounted on /api keeps req.query populated
-      await handler(req, res);
+      await routeResult.handler(req, res);
     } catch (err) {
       console.error('Error running API handler:', err);
-      res.status(500).json({ error: 'Internal server error from local proxy.' });
+      return res.status(500).json({ error: 'Internal server error from local proxy.' });
     }
-  } else {
-    res.status(404).json({ error: 'API route not found' });
-  }
-});
+  });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Fallback Local API Server listening on http://localhost:${PORT}`);
-});
+  return app;
+}
+
+if (require.main === module) {
+  const PORT = 3000;
+  createApp().listen(PORT, () => {
+    console.log(`Fallback Local API Server listening on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { createApp, resolveApiRoute, ROUTE_MODULES, API_ROOT };
