@@ -1,6 +1,7 @@
 const { bootstrapSession, fetchAllocation, fetchInfo, formatDate, toISO } = require('./_lib/tefas');
 const supabase = require('./_lib/supabase');
 const { ensureSupabase } = require('./_lib/supabase-guard');
+const { ValidationError, parsePositiveInt } = require('./_lib/validation');
 
 const FIVE_YEARS_IN_DAYS = 365 * 5;
 

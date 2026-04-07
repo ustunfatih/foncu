@@ -1,15 +1,9 @@
 const supabase = require('./supabase');
 
 function ensureSupabase(res) {
-  if (supabase) {
-    return true;
-  }
-
-  res.setHeader('Cache-Control', 'no-store');
+  if (supabase) return true;
   res.status(503).json({ error: 'Supabase not configured' });
   return false;
 }
 
-module.exports = {
-  ensureSupabase,
-};
+module.exports = { ensureSupabase };

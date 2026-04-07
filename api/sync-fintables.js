@@ -37,25 +37,53 @@ module.exports = async (req, res) => {
 
   try {
     if (phase === 'holdings') {
+      if (!fintablesToken) {
+        const elapsed = Date.now() - startedAt;
+        const summary = {
+          phase,
+          profileCount: 0,
+          allocationCount: 0,
+          metricCount: 0,
+          holdingCount: 0,
+          kapEventCount: 0,
+          skippedModules: [],
+        };
+        summary.skippedModules.push({
+          module: 'holdings',
+          supported: false,
+          reason: HOLDINGS_UNSUPPORTED_REASON,
+        });
+        log.push(HOLDINGS_UNSUPPORTED_REASON);
+        return res.status(501).json({
+          ok: false,
+          error: HOLDINGS_UNSUPPORTED_REASON,
+          elapsed,
+          summary,
+          log,
+        });
+      }
+
+      const holdingResult = await syncFundHoldings(log, fintablesToken);
       const elapsed = Date.now() - startedAt;
       const summary = {
         phase,
         profileCount: 0,
         allocationCount: 0,
         metricCount: 0,
-        holdingCount: 0,
+        holdingCount: holdingResult.holdingCount ?? 0,
         kapEventCount: 0,
+        holdingsReportPeriod: holdingResult.reportPeriod ?? null,
         skippedModules: [],
       };
-      summary.skippedModules.push({
-        module: 'holdings',
-        supported: false,
-        reason: HOLDINGS_UNSUPPORTED_REASON,
-      });
-      log.push(HOLDINGS_UNSUPPORTED_REASON);
-      return res.status(501).json({
-        ok: false,
-        error: HOLDINGS_UNSUPPORTED_REASON,
+      if (holdingResult.supported === false) {
+        summary.skippedModules.push({
+          module: 'holdings',
+          supported: false,
+          reason: holdingResult.reason || HOLDINGS_UNSUPPORTED_REASON,
+        });
+      }
+      return res.status(200).json({
+        ok: true,
         elapsed,
         summary,
         log,

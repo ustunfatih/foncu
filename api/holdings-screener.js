@@ -2,6 +2,7 @@ const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { resolveLatestPublishedHoldingsPeriod } = require('./_lib/holdings-periods');
 const { ensureSupabase } = require('./_lib/supabase-guard');
+const { ValidationError, parseNumber, parsePositiveInt } = require('./_lib/validation');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
