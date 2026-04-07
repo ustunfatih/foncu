@@ -22,6 +22,8 @@ jest.mock('../_lib/providers/fund-history-provider', () => ({
 }));
 
 jest.mock('../_lib/providers/fund-holdings-provider', () => ({
+  HOLDINGS_UNSUPPORTED_REASON:
+    'Monthly holdings sync is handled by scripts/sync_kap_holdings.py and the GitHub Actions workflow.',
   syncFundHoldings: (...args) => syncFundHoldings(...args),
   syncKapEvents: (...args) => syncKapEvents(...args),
 }));
@@ -75,7 +77,7 @@ beforeEach(() => {
 });
 
 test('runs the full sync and returns summary details', async () => {
-  const req = { headers: {}, query: { secret: 'test-secret' } };
+  const req = { method: 'POST', headers: { authorization: 'Bearer test-secret' }, query: {} };
   const res = createRes();
 
   await handler(req, res);
@@ -88,10 +90,18 @@ test('runs the full sync and returns summary details', async () => {
   expect(syncKapEvents).toHaveBeenCalled();
   expect(res.payload.summary.coverage.fundsWithYtd).toBe(1);
   expect(res.payload.log).toContain('Monthly holdings sync is handled outside Vercel by the KAP workflow.');
+  expect(res.payload.summary.skippedModules).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        module: 'holdings',
+        supported: false,
+      }),
+    ])
+  );
 });
 
 test('supports metrics-only backfill mode', async () => {
-  const req = { headers: {}, query: { secret: 'test-secret', phase: 'metrics' } };
+  const req = { method: 'POST', headers: { authorization: 'Bearer test-secret' }, query: { phase: 'metrics' } };
   const res = createRes();
 
   await handler(req, res);
@@ -106,7 +116,7 @@ test('supports metrics-only backfill mode', async () => {
 });
 
 test('supports the daily sync phase without running holdings', async () => {
-  const req = { headers: {}, query: { secret: 'test-secret', phase: 'daily' } };
+  const req = { method: 'POST', headers: { authorization: 'Bearer test-secret' }, query: { phase: 'daily' } };
   const res = createRes();
 
   await handler(req, res);
@@ -119,29 +129,37 @@ test('supports the daily sync phase without running holdings', async () => {
 });
 
 test('keeps monthly holdings sync as an explicit external phase', async () => {
-  const req = { headers: {}, query: { secret: 'test-secret', phase: 'holdings' } };
+  const req = { method: 'POST', headers: { authorization: 'Bearer test-secret' }, query: { phase: 'holdings' } };
   const res = createRes();
-
-  syncFundHoldings.mockRejectedValueOnce(Object.assign(new Error('Monthly holdings sync is handled by scripts/sync_kap_holdings.py and the GitHub Actions workflow.'), { statusCode: 501 }));
 
   await handler(req, res);
 
   expect(res.statusCode).toBe(501);
+  expect(res.payload.error).toContain('scripts/sync_kap_holdings.py');
   expect(syncFundProfiles).not.toHaveBeenCalled();
   expect(syncFundAllocations).not.toHaveBeenCalled();
   expect(syncFundMetrics).not.toHaveBeenCalled();
-  expect(syncFundHoldings).toHaveBeenCalled();
+  expect(syncFundHoldings).not.toHaveBeenCalled();
+  expect(res.payload.summary.skippedModules).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        module: 'holdings',
+        supported: false,
+      }),
+    ])
+  );
 });
 
 test('can backfill missing historical data before metrics refresh', async () => {
   const req = {
     headers: {},
     query: {
-      secret: 'test-secret',
       phase: 'metrics',
       backfillMissingHistory: '1',
     },
   };
+  req.method = 'POST';
+  req.headers.authorization = 'Bearer test-secret';
   const res = createRes();
 
   await handler(req, res);
@@ -157,7 +175,7 @@ test('can backfill missing historical data before metrics refresh', async () => 
 });
 
 test('invalidates cached read models after a sync', async () => {
-  const req = { headers: {}, query: { secret: 'test-secret' } };
+  const req = { method: 'POST', headers: { authorization: 'Bearer test-secret' }, query: {} };
   const res = createRes();
 
   await handler(req, res);
@@ -172,4 +190,65 @@ test('invalidates cached read models after a sync', async () => {
     'holdings-screener',
     'fund-profile',
   ]);
+});
+
+test('rejects query-based secret authentication', async () => {
+  const req = { method: 'POST', headers: {}, query: { secret: 'test-secret' } };
+  const res = createRes();
+
+  await handler(req, res);
+
+  expect(res.statusCode).toBe(401);
+  expect(res.payload.error).toBe('Unauthorized');
+});
+
+test('accepts one-time Fintables token only from x-fintables-token header', async () => {
+  const req = {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer test-secret',
+      'x-fintables-token': 'header-token',
+    },
+    query: {
+      phase: 'holdings',
+      token: 'query-token',
+    },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  expect(res.statusCode).toBe(200);
+  expect(syncFundHoldings).toHaveBeenCalledWith(expect.any(Array), 'header-token');
+});
+
+test('rejects non-POST manual invocations', async () => {
+  const req = {
+    method: 'GET',
+    headers: { authorization: 'Bearer test-secret' },
+    query: {},
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  expect(res.statusCode).toBe(405);
+  expect(res.payload.error).toContain('Use POST for manual runs');
+});
+
+test('allows GET for vercel cron requests', async () => {
+  const req = {
+    method: 'GET',
+    headers: {
+      authorization: 'Bearer test-secret',
+      'x-vercel-cron': '1',
+    },
+    query: { phase: 'daily' },
+  };
+  const res = createRes();
+
+  await handler(req, res);
+
+  expect(res.statusCode).toBe(200);
+  expect(syncFundProfiles).toHaveBeenCalled();
 });

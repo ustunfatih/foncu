@@ -21,6 +21,10 @@
       "destination": "/api/sync-fintables?phase=daily"
     },
     {
+      "source": "/api/sync-fintables-manual",
+      "destination": "/api/sync-fintables"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/:path*"
     },
