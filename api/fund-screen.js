@@ -2,6 +2,7 @@ const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { hydrateFundMetricRows } = require('./_lib/providers/fund-metrics-provider');
 const { ensureSupabase } = require('./_lib/supabase-guard');
+const { ValidationError, parseNumber, parsePositiveInt } = require('./_lib/validation');
 
 function applyMinReturnFilter(rows, key, threshold) {
   if (threshold === undefined) return rows;
