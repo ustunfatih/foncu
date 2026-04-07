@@ -475,6 +475,22 @@ body {
   color: var(--text-secondary);
 }
 
+.checklist-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checklist-title {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(70vw, 520px);
+}
+
 .checklist-item.selected {
   background: var(--surface-soft);
 }
