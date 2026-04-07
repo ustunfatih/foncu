@@ -72,7 +72,7 @@ const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
       <div className="selector-dropdown">
         <input
           className="input"
-          placeholder={loading ? 'Loading funds...' : 'Search fund codes...'}
+          placeholder={loading ? 'Loading funds...' : 'Search by fund code or name...'}
           value={query}
           disabled={loading}
           onFocus={() => setIsOpen(true)}
@@ -119,7 +119,10 @@ const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
                     tabIndex={-1}
                     aria-hidden="true"
                   />
-                  <span className="checklist-code">{fund.code}</span>
+                  <div className="checklist-meta">
+                    <span className="checklist-code">{fund.code}</span>
+                    <span className="checklist-title">{fund.title}</span>
+                  </div>
                   <span className="sr-only">{isSelected ? 'Selected' : 'Not selected'}</span>
                 </li>
               );
