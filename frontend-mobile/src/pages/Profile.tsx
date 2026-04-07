@@ -1,8 +1,10 @@
 type Props = {
   onNavigate: (view: "portfolio") => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
-export default function Profile({ onNavigate }: Props) {
+export default function Profile({ onNavigate, theme, onToggleTheme }: Props) {
   return (
     <div className="page">
       <header className="page-header">
@@ -50,6 +52,10 @@ export default function Profile({ onNavigate }: Props) {
           <h2>Ayarlar</h2>
         </div>
         <div className="settings-list">
+          <button className="settings-item" onClick={onToggleTheme}>
+            <span>Tema</span>
+            <span className="pill">{theme === "dark" ? "Koyu" : "Acik"}</span>
+          </button>
           <button className="settings-item">
             <span>Bildirim tercihleri</span>
             <span className="pill">Acik</span>

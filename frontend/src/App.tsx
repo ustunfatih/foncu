@@ -53,6 +53,8 @@ const fundKinds: { label: string; value: FundKind }[] = [
 const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 
 const SELECTED_CODES_KEY = 'foncu_selectedCodes';
+const THEME_STORAGE_KEY = 'foncu_theme';
+type ThemeMode = 'light' | 'dark';
 
 const App = () => {
   // Read URL params on mount to support deep-linking into Örtüşme tab
@@ -82,6 +84,13 @@ const App = () => {
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
+    }
+  });
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    try {
+      return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
     }
   });
   const [activeTimeFilter, setActiveTimeFilter] = useState(timeFilters[3]); // 3M default
@@ -145,6 +154,27 @@ const App = () => {
       // ignore storage errors
     }
   }, [selectedCodes]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY) return;
+      setTheme(event.newValue === 'dark' ? 'dark' : 'light');
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   // Fetch fund list on mount or when kind changes
   useEffect(() => {
@@ -243,6 +273,10 @@ const App = () => {
     setRefreshKey(k => k + 1); // Trigger useEffect
   }, []);
 
+  const handleThemeToggle = useCallback(() => {
+    setTheme((currentTheme) => currentTheme === 'light' ? 'dark' : 'light');
+  }, []);
+
   const getDaysForYBB = () => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 1);
@@ -338,7 +372,7 @@ const App = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {user ? (
             <>
-              <span style={{ fontSize: 14, color: '#64748b' }}>{user.email || user.user_metadata?.user_name}</span>
+              <span style={{ fontSize: 14, color: 'var(--color-muted)' }}>{user.email || user.user_metadata?.user_name}</span>
               <button className="chip active" onClick={savePortfolio} disabled={selectedCodes.length === 0}>
                 💾 Kaydet
               </button>
@@ -357,7 +391,15 @@ const App = () => {
               GitHub ile Giriş
             </button>
           )}
-          <div className="badge">Tefas Crawler Engine</div>
+          <button
+            type="button"
+            className={`chip theme-toggle ${theme === 'dark' ? 'active' : ''}`}
+            onClick={handleThemeToggle}
+            aria-pressed={theme === 'dark'}
+            title={theme === 'dark' ? 'Koyu tema açık' : 'Açık tema açık'}
+          >
+            {theme === 'dark' ? 'Koyu Tema' : 'Açık Tema'}
+          </button>
         </div>
       </header>
 
@@ -432,8 +474,8 @@ const App = () => {
       {activeTab === 'home' && (
         <>
           {error && (
-            <div className="card" style={{ background: '#fef2f2', borderColor: '#fecaca', marginBottom: 16 }}>
-              <p style={{ color: '#dc2626', margin: 0 }}>Error: {error}</p>
+            <div className="card" style={{ background: 'var(--error-surface)', borderColor: 'var(--error-border)', marginBottom: 16 }}>
+              <p style={{ color: 'var(--error-text)', margin: 0 }}>Error: {error}</p>
             </div>
           )}
 
@@ -609,8 +651,8 @@ const App = () => {
               </div>
             </>
           ) : (
-            <div className="card" style={{ textAlign: 'center', padding: '60px', background: '#f8fafc' }}>
-              <p style={{ color: '#64748b', fontSize: '1.1rem' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '60px', background: 'var(--surface-muted)' }}>
+              <p style={{ color: 'var(--color-muted-soft)', fontSize: '1.1rem' }}>
                 Select up to 5 funds to start tracking their performance.
               </p>
             </div>
