@@ -1,13 +1,27 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { resolveLatestPublishedHoldingsPeriod } = require('./_lib/holdings-periods');
+const { ValidationError, parseNumber, parsePositiveInt } = require('./_lib/validation');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
 
   try {
-    const { ticker, minWeight = 0, fundType = 'mutual', limit = 50 } = req.query;
+    const { ticker, minWeight, fundType = 'mutual', limit } = req.query;
     if (!ticker) return res.status(400).json({ error: 'ticker param required' });
+
+    const parsedLimit = parsePositiveInt(limit, {
+      paramName: 'limit',
+      min: 1,
+      max: 200,
+      defaultValue: 50,
+    });
+    const parsedMinWeight = parseNumber(minWeight, {
+      paramName: 'minWeight',
+      min: 0,
+      max: 100,
+      defaultValue: 0,
+    });
 
     const kindMap = {
       YAT: 'mutual', EMK: 'pension', BYF: 'exchange',
@@ -18,9 +32,9 @@ module.exports = async (req, res) => {
     const { value, cached } = await getOrSetCache(
       createCacheKey('holdings-screener', {
         ticker: ticker.toUpperCase(),
-        minWeight: Number(minWeight),
+        minWeight: parsedMinWeight,
         fundType: fon_tipi,
-        limit: Number(limit),
+        limit: parsedLimit,
       }),
       TTL.HOLDINGS_SCREEN,
       async () => {
@@ -33,7 +47,7 @@ module.exports = async (req, res) => {
           .from('fund_holdings')
           .select('fon_kodu, yuzdesel_agirlik, rapor_yil, rapor_ay')
           .eq('hisse_kodu', ticker.toUpperCase())
-          .gte('yuzdesel_agirlik', Number(minWeight))
+          .gte('yuzdesel_agirlik', parsedMinWeight)
           .eq('rapor_yil', reportPeriod.yil)
           .eq('rapor_ay', reportPeriod.ay);
 
@@ -68,7 +82,7 @@ module.exports = async (req, res) => {
           })
           .filter(Boolean)
           .sort((a, b) => b.agirlik - a.agirlik)
-          .slice(0, Number(limit));
+          .slice(0, parsedLimit);
 
         const refreshedAt = (profiles || [])
           .map((row) => row.guncelleme_zamani)
@@ -95,6 +109,9 @@ module.exports = async (req, res) => {
       },
     });
   } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('[holdings-screener] Error:', err);
     return res.status(500).json({ error: err.message });
   }

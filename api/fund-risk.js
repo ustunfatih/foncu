@@ -6,6 +6,7 @@ const {
   calculateMaxDrawdown,
   calculateReturn,
 } = require('./_lib/analytics');
+const { ValidationError, parsePositiveInt } = require('./_lib/validation');
 
 const getDateOffset = (days) => {
   const end = new Date();
@@ -22,7 +23,12 @@ module.exports = async function handler(req, res) {
       return res.status(503).json({ error: 'Supabase not configured' });
     }
     const code = (req.query.code || '').toString().trim().toUpperCase();
-    const days = Number(req.query.days) || 365;
+    const days = parsePositiveInt(req.query.days, {
+      paramName: 'days',
+      min: 30,
+      max: 365 * 5,
+      defaultValue: 365,
+    });
     if (!code) {
       return res.status(400).json({ error: 'Missing code parameter' });
     }
@@ -48,6 +54,9 @@ module.exports = async function handler(req, res) {
       metrics,
     });
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('[fund-risk] failed', error);
     return res.status(500).json({ error: 'Failed to load fund risk' });
   }
