@@ -1,4 +1,5 @@
 const supabase = require('./_lib/supabase');
+const { ValidationError, parseNumber, parsePositiveInt } = require('./_lib/validation');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
@@ -54,7 +55,7 @@ module.exports = async (req, res) => {
         .order('getiri_1y', { ascending: false });
     }
 
-    query = query.limit(Number(limit));
+    query = query.limit(parsedLimit);
     const { data, error } = await query;
     if (error) throw error;
 
@@ -77,6 +78,9 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ results, mode, total: results.length });
   } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('[fund-technical-scan] Error:', err);
     return res.status(500).json({ error: err.message });
   }
