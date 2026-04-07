@@ -1,4 +1,5 @@
 const supabase = require('./_lib/supabase');
+const { ValidationError, parseNumber, parsePositiveInt } = require('./_lib/validation');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
@@ -7,9 +8,21 @@ module.exports = async (req, res) => {
     const {
       kind = 'YAT',
       mode = 'rsi',         // 'rsi' | 'sma' | 'ma200'
-      rsiThreshold = 35,
+      rsiThreshold,
+      rsiBelow,
       limit = 50
     } = req.query;
+
+    const resolvedRsiThreshold = Number(rsiThreshold ?? rsiBelow ?? 35);
+    if (Number.isNaN(resolvedRsiThreshold)) {
+      return res.status(400).json({ error: 'rsiThreshold must be a valid number' });
+    }
+
+    if (rsiBelow !== undefined) {
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Sunset', '2026-07-01');
+      res.setHeader('Link', '</api/fund-technical-scan?rsiThreshold=35>; rel="successor-version"');
+    }
 
     const kindMap = { YAT: 'mutual', EMK: 'pension', BYF: 'exchange' };
     const fon_tipi = kindMap[kind.toUpperCase()] ?? 'mutual';
@@ -29,7 +42,7 @@ module.exports = async (req, res) => {
     if (mode === 'rsi') {
       query = query
         .not('rsi_14', 'is', null)
-        .lte('rsi_14', Number(rsiThreshold))
+        .lte('rsi_14', resolvedRsiThreshold)
         .order('rsi_14', { ascending: true });
     } else if (mode === 'sma') {
       query = query
@@ -42,7 +55,7 @@ module.exports = async (req, res) => {
         .order('getiri_1y', { ascending: false });
     }
 
-    query = query.limit(Number(limit));
+    query = query.limit(parsedLimit);
     const { data, error } = await query;
     if (error) throw error;
 
@@ -65,6 +78,9 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ results, mode, total: results.length });
   } catch (err) {
+    if (err instanceof ValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     console.error('[fund-technical-scan] Error:', err);
     return res.status(500).json({ error: err.message });
   }
