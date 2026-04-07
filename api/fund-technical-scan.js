@@ -7,9 +7,21 @@ module.exports = async (req, res) => {
     const {
       kind = 'YAT',
       mode = 'rsi',         // 'rsi' | 'sma' | 'ma200'
-      rsiThreshold = 35,
+      rsiThreshold,
+      rsiBelow,
       limit = 50
     } = req.query;
+
+    const resolvedRsiThreshold = Number(rsiThreshold ?? rsiBelow ?? 35);
+    if (Number.isNaN(resolvedRsiThreshold)) {
+      return res.status(400).json({ error: 'rsiThreshold must be a valid number' });
+    }
+
+    if (rsiBelow !== undefined) {
+      res.setHeader('Deprecation', 'true');
+      res.setHeader('Sunset', '2026-07-01');
+      res.setHeader('Link', '</api/fund-technical-scan?rsiThreshold=35>; rel="successor-version"');
+    }
 
     const kindMap = { YAT: 'mutual', EMK: 'pension', BYF: 'exchange' };
     const fon_tipi = kindMap[kind.toUpperCase()] ?? 'mutual';
@@ -29,7 +41,7 @@ module.exports = async (req, res) => {
     if (mode === 'rsi') {
       query = query
         .not('rsi_14', 'is', null)
-        .lte('rsi_14', Number(rsiThreshold))
+        .lte('rsi_14', resolvedRsiThreshold)
         .order('rsi_14', { ascending: true });
     } else if (mode === 'sma') {
       query = query

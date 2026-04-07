@@ -4,7 +4,7 @@ import { FundKind, TechnicalScanResult } from '../types';
 
 const TechnicalScannerPage = () => {
   const [kind, setKind] = useState<FundKind>('YAT');
-  const [rsiBelow, setRsiBelow] = useState(30);
+  const [rsiThreshold, setRsiThreshold] = useState(30);
   const [results, setResults] = useState<TechnicalScanResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +13,7 @@ const TechnicalScannerPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchTechnicalScan(kind, rsiBelow);
+      const data = await fetchTechnicalScan(kind, rsiThreshold);
       setResults(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to scan funds');
@@ -50,8 +50,8 @@ const TechnicalScannerPage = () => {
             <input
               className="input"
               type="number"
-              value={rsiBelow}
-              onChange={(e) => setRsiBelow(Number(e.target.value))}
+              value={rsiThreshold}
+              onChange={(e) => setRsiThreshold(Number(e.target.value))}
             />
           </label>
         </div>
@@ -82,9 +82,9 @@ const TechnicalScannerPage = () => {
                   <td>{fund.code}</td>
                   <td>{fund.title}</td>
                   <td>{fund.rsi?.toFixed(1) ?? 'N/A'}</td>
-                  <td>{fund.shortSma?.toFixed(2) ?? 'N/A'}</td>
-                  <td>{fund.longSma?.toFixed(2) ?? 'N/A'}</td>
-                  <td>{fund.smaCross ? '✅' : '—'}</td>
+                  <td>{fund.sma20?.toFixed(2) ?? 'N/A'}</td>
+                  <td>{fund.sma50?.toFixed(2) ?? 'N/A'}</td>
+                  <td>{fund.smaCrossover ? '✅' : '—'}</td>
                 </tr>
               ))}
             </tbody>
