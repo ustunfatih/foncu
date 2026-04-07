@@ -2,23 +2,90 @@ const supabase = require('./_lib/supabase');
 const { fetchLatestPriceBatch } = require('./_lib/history');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
 
+function parseBody(req, res) {
+  if (typeof req.body === 'string') {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      res.status(400).json({ error: 'Invalid JSON body' });
+      return null;
+    }
+  }
+  return req.body || {};
+}
+
+function validateValuationHoldings(holdings) {
+  if (!Array.isArray(holdings) || holdings.length === 0) {
+    return { error: { error: 'Holdings must be a non-empty array' } };
+  }
+
+  const errors = [];
+  const normalized = holdings.map((holding, index) => {
+    const row = holding && typeof holding === 'object' ? holding : {};
+    const code = String(row.code ?? '').trim().toUpperCase();
+    const shares = Number(row.shares);
+    const cost = Number(row.cost);
+
+    if (!code) errors.push({ index, field: 'code', message: 'code must be a non-empty string' });
+    if (!Number.isFinite(shares) || shares <= 0) errors.push({ index, field: 'shares', message: 'shares must be a finite number greater than 0' });
+    if (!Number.isFinite(cost) || cost < 0) errors.push({ index, field: 'cost', message: 'cost must be a finite number greater than or equal to 0' });
+
+    return { code, shares, cost };
+  });
+
+  if (errors.length > 0) {
+    return {
+      error: {
+        error: 'Invalid holdings entries',
+        details: errors,
+      },
+    };
+  }
+
+  return { holdings: normalized };
+}
+
+function validateExposureHoldings(holdings) {
+  if (!Array.isArray(holdings) || holdings.length === 0) {
+    return { error: { error: 'Holdings must be a non-empty array' } };
+  }
+
+  const errors = [];
+  const normalized = holdings.map((holding, index) => {
+    const row = holding && typeof holding === 'object' ? holding : {};
+    const fundCode = String(row.fundCode ?? '').trim().toUpperCase();
+    const shares = Number(row.shares);
+    const currentValue = Number(row.currentValue);
+
+    if (!fundCode) errors.push({ index, field: 'fundCode', message: 'fundCode must be a non-empty string' });
+    if (!Number.isFinite(shares) || shares <= 0) errors.push({ index, field: 'shares', message: 'shares must be a finite number greater than 0' });
+    if (!Number.isFinite(currentValue) || currentValue < 0) errors.push({ index, field: 'currentValue', message: 'currentValue must be a finite number greater than or equal to 0' });
+
+    return { fundCode, shares, currentValue };
+  });
+
+  if (errors.length > 0) {
+    return {
+      error: {
+        error: 'Invalid holdings entries',
+        details: errors,
+      },
+    };
+  }
+
+  return { holdings: normalized };
+}
+
 async function handleValuation(req, res) {
   if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
 
-  let body = req.body;
-  if (typeof req.body === 'string') {
-    try { body = JSON.parse(req.body); } catch { return res.status(400).json({ error: 'Invalid JSON body' }); }
-  }
-  const { holdings = [] } = body || {};
-  if (!Array.isArray(holdings) || holdings.length === 0) {
-    return res.status(400).json({ error: 'Holdings must be a non-empty array' });
-  }
+  const body = parseBody(req, res);
+  if (body === null) return;
 
-  const normalizedHoldings = holdings
-    .map(h => ({ code: (h.code || '').toString().trim().toUpperCase(), shares: Number(h.shares), cost: Number(h.cost) }))
-    .filter(h => h.code && Number.isFinite(h.shares) && h.shares > 0);
+  const validation = validateValuationHoldings(body.holdings);
+  if (validation.error) return res.status(400).json(validation.error);
 
-  if (normalizedHoldings.length === 0) return res.status(422).json({ error: 'Holdings contain no valid entries' });
+  const normalizedHoldings = validation.holdings;
 
   const uniqueCodes = [...new Set(normalizedHoldings.map(h => h.code))];
   let latestPricesBatch = {};
@@ -40,14 +107,17 @@ async function handleValuation(req, res) {
     const entry = latestByCode.get(holding.code);
     const latest = entry?.latest || null;
     const price = latest ? latest.value : 0;
-    const costPerShare = Number.isFinite(holding.cost) ? holding.cost : 0;
     const value = price * holding.shares;
-    const costValue = costPerShare * holding.shares;
+    const costValue = holding.cost * holding.shares;
     totalValue += value;
     totalCost += costValue;
     enriched.push({
-      code: holding.code, shares: holding.shares, cost: costPerShare,
-      latestPrice: price, latestDate: latest?.date || null, value,
+      code: holding.code,
+      shares: holding.shares,
+      cost: holding.cost,
+      latestPrice: price,
+      latestDate: latest?.date || null,
+      value,
       pnl: value - costValue,
       error: entry?.error ? (entry.error.message || 'Latest price lookup failed') : null,
       warning: latest ? null : 'Latest price not found',
@@ -65,17 +135,19 @@ async function handleValuation(req, res) {
 async function handleExposure(req, res) {
   if (!supabase) return res.status(503).json({ error: 'Supabase not configured' });
 
-  const { holdings } = req.body;
-  if (!Array.isArray(holdings) || !holdings.length) {
-    return res.status(400).json({ error: 'holdings array required' });
-  }
+  const body = parseBody(req, res);
+  if (body === null) return;
 
-  const totalValue = holdings.reduce((sum, h) => sum + (h.currentValue ?? 0), 0);
+  const validation = validateExposureHoldings(body.holdings);
+  if (validation.error) return res.status(400).json(validation.error);
+
+  const holdings = validation.holdings;
+  const totalValue = holdings.reduce((sum, h) => sum + h.currentValue, 0);
   if (totalValue === 0) return res.status(400).json({ error: 'totalValue is 0' });
 
-  const fundCodes = holdings.map(h => h.fundCode.toUpperCase());
+  const fundCodes = holdings.map(h => h.fundCode);
   const allocationByFund = Object.fromEntries(
-    holdings.map(h => [h.fundCode.toUpperCase(), h.currentValue / totalValue])
+    holdings.map(h => [h.fundCode, h.currentValue / totalValue])
   );
 
   const reportPeriod = await resolveLatestCommonHoldingsPeriod(fundCodes);
