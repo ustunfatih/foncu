@@ -66,6 +66,9 @@ The `vercel.json` file configures:
 - Build command: `npm run build`
 - Output directory: `frontend/dist`
 - API rewrites for serverless functions
+- Security headers (including CSP)
+
+For CSP ownership, safe change workflow, and regression checks, see `docs/CSP_POLICY.md`.
 
 ### 5. Testing Deployment
 

@@ -2,6 +2,7 @@
   "scripts": {
     "dev": "concurrently \"node api-server.js\" \"cd frontend && npm run dev\"",
     "build": "cd frontend && npm install && npm run build",
+    "check:csp": "node scripts/check-csp.js",
     "test": "jest --testPathPatterns='api/__tests__'",
     "test:watch": "jest --watch --testPathPatterns='api/__tests__'"
   },
