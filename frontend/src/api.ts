@@ -2,7 +2,6 @@ import {
   FundKind,
   FundOverview,
   FundSummary,
-  FundRiskResponse,
   FundScreenResult,
   MacroSeries,
   PortfolioHoldingInput,
@@ -78,14 +77,6 @@ export const fetchFundDetails = async (
 
   const response = await fetchWithTimeout<{ fund: FundOverview }>(url.toString());
   return response.fund;
-};
-
-export const fetchFundRisk = async (code: string, days = 365): Promise<FundRiskResponse> => {
-  const apiBase = getApiBase();
-  const url = new URL(`${apiBase}/api/fund-risk`);
-  url.searchParams.append('code', code);
-  url.searchParams.append('days', days.toString());
-  return fetchWithTimeout<FundRiskResponse>(url.toString());
 };
 
 export const fetchFundScreen = async (kind: FundKind, minReturn1y?: number, minReturn1m?: number) => {

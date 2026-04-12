@@ -30,21 +30,6 @@ export interface FundOverview {
   latestDate: string;
 }
 
-export interface FundRiskMetrics {
-  sharpe: number | null;
-  volatility: number | null;
-  maxDrawdown: number | null;
-  return1m: number | null;
-  return3m: number | null;
-  return1y: number | null;
-}
-
-export interface FundRiskResponse {
-  code: string;
-  range: { start: string; end: string };
-  metrics: FundRiskMetrics;
-}
-
 export interface FundScreenResult {
   code: string;
   title: string;
