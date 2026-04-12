@@ -46,15 +46,23 @@ function buildMatrix(holdingsByFund) {
   const funds = Object.keys(holdingsByFund);
   const matrix = {};
 
-  for (const fundA of funds) {
-    matrix[fundA] = {};
-    for (const fundB of funds) {
-      if (fundA === fundB) continue;
+  for (const fund of funds) {
+    matrix[fund] = {};
+  }
+
+  for (let i = 0; i < funds.length; i++) {
+    const fundA = funds[i];
+    for (let j = i + 1; j < funds.length; j++) {
+      const fundB = funds[j];
       const wA = holdingsByFund[fundA];
       const wB = holdingsByFund[fundB];
+
       const pct = weightedJaccard(wA, wB);
       const sharedCount = Object.keys(wA).filter(t => wB[t] !== undefined).length;
-      matrix[fundA][fundB] = { pct: Math.round(pct * 1000) / 10, sharedCount };
+
+      const result = { pct: Math.round(pct * 1000) / 10, sharedCount };
+      matrix[fundA][fundB] = result;
+      matrix[fundB][fundA] = result;
     }
   }
 
