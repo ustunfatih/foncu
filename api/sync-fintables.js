@@ -2,15 +2,30 @@ const { syncFundProfiles, syncFundAllocations } = require('./_lib/providers/fund
 const { syncFundMetrics } = require('./_lib/providers/fund-metrics-provider');
 const { backfillMissingMetricHistory } = require('./_lib/providers/fund-history-provider');
 const { syncFundHoldings, syncKapEvents } = require('./_lib/providers/fund-holdings-provider');
+const crypto = require('crypto');
 const { invalidateCacheByPrefix } = require('./_lib/cache');
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
+/**
+ * Constant-time comparison for secrets to prevent timing attacks.
+ * It hashes both strings first to ensure they are the same length
+ * before using crypto.timingSafeEqual.
+ */
+function safeCompare(provided, expected) {
+  if (typeof provided !== 'string' || !expected) return false;
+
+  const providedHash = crypto.createHash('sha256').update(provided).digest();
+  const expectedHash = crypto.createHash('sha256').update(expected).digest();
+
+  return crypto.timingSafeEqual(providedHash, expectedHash);
+}
+
 module.exports = async (req, res) => {
   // Vercel cron sends Authorization: Bearer <CRON_SECRET>
   const bearerToken = (req.headers['authorization'] || '').replace('Bearer ', '');
-  const isVercelCron = !!CRON_SECRET && bearerToken === CRON_SECRET;
-  const isManual = !!CRON_SECRET && req.query.secret === CRON_SECRET;
+  const isVercelCron = !!CRON_SECRET && safeCompare(bearerToken, CRON_SECRET);
+  const isManual = !!CRON_SECRET && safeCompare(req.query.secret, CRON_SECRET);
   if (!isVercelCron && !isManual) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
