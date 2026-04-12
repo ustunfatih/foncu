@@ -12,7 +12,14 @@ require('dotenv').config();
 app.use('/api', async (req, res) => {
   // req.path will be like "/overlap" or "/fund-profile" since it's mounted on /api
   const fileRoute = req.path.replace(/^\//, ''); 
-  const jsPath = path.join(__dirname, 'api', fileRoute + '.js');
+  const apiDir = path.join(__dirname, 'api');
+  const jsPath = path.resolve(apiDir, fileRoute + '.js');
+
+  // Security check: Ensure the resolved path is still inside the api directory
+  const relative = path.relative(apiDir, jsPath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
 
   if (fs.existsSync(jsPath)) {
     try {
