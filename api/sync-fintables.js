@@ -1,28 +1,95 @@
 const { syncFundProfiles, syncFundAllocations } = require('./_lib/providers/fund-profiles-provider');
 const { syncFundMetrics } = require('./_lib/providers/fund-metrics-provider');
 const { backfillMissingMetricHistory } = require('./_lib/providers/fund-history-provider');
-const { syncFundHoldings, syncKapEvents } = require('./_lib/providers/fund-holdings-provider');
+const {
+  HOLDINGS_UNSUPPORTED_REASON,
+  syncFundHoldings,
+  syncKapEvents,
+} = require('./_lib/providers/fund-holdings-provider');
 const { invalidateCacheByPrefix } = require('./_lib/cache');
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
 module.exports = async (req, res) => {
-  // Vercel cron sends Authorization: Bearer <CRON_SECRET>
+  const requestMethod = (req.method || 'GET').toString().toUpperCase();
+  const isVercelCronRequest = ['1', 'true'].includes(String(req.headers['x-vercel-cron']).toLowerCase());
+  const isManualPost = requestMethod === 'POST';
+
+  if (!isManualPost && !(requestMethod === 'GET' && isVercelCronRequest)) {
+    return res.status(405).json({
+      error: 'Method Not Allowed. Use POST for manual runs.',
+    });
+  }
+
+  // Vercel cron/manual callers must send Authorization: Bearer <CRON_SECRET>
   const bearerToken = (req.headers['authorization'] || '').replace('Bearer ', '');
   const isVercelCron = !!CRON_SECRET && bearerToken === CRON_SECRET;
-  const isManual = !!CRON_SECRET && req.query.secret === CRON_SECRET;
-  if (!isVercelCron && !isManual) {
+  if (!isVercelCron) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const phase = (req.query.phase || 'all').toString().toLowerCase();
-  const fintablesToken = req.query.token || undefined; // optional one-time token override
+  const fintablesToken = req.headers['x-fintables-token'] || undefined; // optional one-time token override
   const shouldBackfillMissingHistory =
     req.query.backfillMissingHistory === '1' || req.query.backfillMissingHistory === 'true';
   const log = [];
   const startedAt = Date.now();
 
   try {
+    if (phase === 'holdings') {
+      if (!fintablesToken) {
+        const elapsed = Date.now() - startedAt;
+        const summary = {
+          phase,
+          profileCount: 0,
+          allocationCount: 0,
+          metricCount: 0,
+          holdingCount: 0,
+          kapEventCount: 0,
+          skippedModules: [],
+        };
+        summary.skippedModules.push({
+          module: 'holdings',
+          supported: false,
+          reason: HOLDINGS_UNSUPPORTED_REASON,
+        });
+        log.push(HOLDINGS_UNSUPPORTED_REASON);
+        return res.status(501).json({
+          ok: false,
+          error: HOLDINGS_UNSUPPORTED_REASON,
+          elapsed,
+          summary,
+          log,
+        });
+      }
+
+      const holdingResult = await syncFundHoldings(log, fintablesToken);
+      const elapsed = Date.now() - startedAt;
+      const summary = {
+        phase,
+        profileCount: 0,
+        allocationCount: 0,
+        metricCount: 0,
+        holdingCount: holdingResult.holdingCount ?? 0,
+        kapEventCount: 0,
+        holdingsReportPeriod: holdingResult.reportPeriod ?? null,
+        skippedModules: [],
+      };
+      if (holdingResult.supported === false) {
+        summary.skippedModules.push({
+          module: 'holdings',
+          supported: false,
+          reason: holdingResult.reason || HOLDINGS_UNSUPPORTED_REASON,
+        });
+      }
+      return res.status(200).json({
+        ok: true,
+        elapsed,
+        summary,
+        log,
+      });
+    }
+
     let profiles = [];
     const summary = {
       phase,
@@ -45,12 +112,17 @@ module.exports = async (req, res) => {
         insertedHistoryRowCount: 0,
         skippedFundCount: 0,
       },
+      skippedModules: [],
     };
 
     const shouldRunProfiles = phase === 'all' || phase === 'profiles' || phase === 'daily';
     const shouldRunMetrics = phase === 'all' || phase === 'metrics' || phase === 'daily';
-    const shouldRunHoldings = phase === 'holdings';
+    const shouldRunHoldings = false;
     const shouldRunEvents = phase === 'all' || phase === 'events' || phase === 'daily';
+
+    const markSkippedModule = (module, reason, supported = false) => {
+      summary.skippedModules.push({ module, supported, reason });
+    };
 
     if (shouldRunProfiles) {
       const profileResult = await syncFundProfiles(log);
@@ -61,6 +133,9 @@ module.exports = async (req, res) => {
     if (shouldRunProfiles) {
       const allocationResult = await syncFundAllocations(log);
       summary.allocationCount = allocationResult.allocationCount;
+    } else {
+      markSkippedModule('profiles', `Phase "${phase}" does not include profile sync.`, true);
+      markSkippedModule('allocations', `Phase "${phase}" does not include allocation sync.`, true);
     }
 
     if (shouldRunMetrics) {
@@ -74,18 +149,29 @@ module.exports = async (req, res) => {
         log.push('Manual metrics-only refresh can be used as a backfill for existing funds.');
       }
     }
+    if (!shouldRunMetrics) {
+      markSkippedModule('metrics', `Phase "${phase}" does not include metrics sync.`, true);
+    }
 
     if (shouldRunHoldings) {
       const holdingResult = await syncFundHoldings(log, fintablesToken);
-      summary.holdingCount = holdingResult.holdingCount;
+      summary.holdingCount = holdingResult.holdingCount ?? 0;
       summary.holdingsReportPeriod = holdingResult.reportPeriod ?? null;
+      if (holdingResult.supported === false) {
+        markSkippedModule('holdings', holdingResult.reason || HOLDINGS_UNSUPPORTED_REASON, false);
+      }
     } else if (phase === 'all' || phase === 'daily') {
       log.push('Monthly holdings sync is handled outside Vercel by the KAP workflow.');
+      markSkippedModule('holdings', HOLDINGS_UNSUPPORTED_REASON, false);
+    } else {
+      markSkippedModule('holdings', `Phase "${phase}" does not include holdings sync.`, true);
     }
 
     if (shouldRunEvents) {
       const kapResult = await syncKapEvents(log, fintablesToken);
       summary.kapEventCount = kapResult.kapEventCount;
+    } else {
+      markSkippedModule('events', `Phase "${phase}" does not include event sync.`, true);
     }
 
     invalidateCacheByPrefix('funds:');
@@ -104,7 +190,10 @@ module.exports = async (req, res) => {
       log,
     });
   } catch (err) {
-    console.error('[sync-fintables] Error:', err);
+    console.error('[sync-fintables] Error:', {
+      message: err.message,
+      statusCode: err.statusCode || 500,
+    });
     return res.status(err.statusCode || 500).json({
       ok: false,
       error: err.message,

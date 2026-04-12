@@ -4,6 +4,8 @@ import type { Fund } from "../types";
 type Props = {
   onSelectFund: (fund: Fund) => void;
   onNavigate: (view: "portfolio") => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
 };
 
 const funds: Fund[] = [
@@ -12,7 +14,7 @@ const funds: Fund[] = [
   { code: "BYF", name: "Borsa Yatirim Fonu", delta: "-0.6%" }
 ];
 
-export default function Home({ onSelectFund, onNavigate }: Props) {
+export default function Home({ onSelectFund, onNavigate, theme, onToggleTheme }: Props) {
   return (
     <div className="page">
       <header className="topbar">
@@ -20,10 +22,12 @@ export default function Home({ onSelectFund, onNavigate }: Props) {
           <span className="brand__mark" />
           <span className="brand__name">TEFAS</span>
         </div>
-        <button className="icon-btn" aria-label="Bildirimler">
-          <span className="icon-dot" />
-          <span className="icon-dot" />
-          <span className="icon-dot" />
+        <button
+          className={`icon-btn theme-chip ${theme === "dark" ? "is-active" : ""}`}
+          aria-label={theme === "dark" ? "Koyu tema acik" : "Acik tema acik"}
+          onClick={onToggleTheme}
+        >
+          <span className="theme-chip__label">{theme === "dark" ? "Koyu" : "Acik"}</span>
         </button>
       </header>
 

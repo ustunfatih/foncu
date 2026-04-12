@@ -1,9 +1,5 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
-
-const app = express();
-app.use(express.json());
 
 // Set up env variables if needed
 require('dotenv').config();
@@ -21,21 +17,22 @@ app.use('/api', async (req, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  if (fs.existsSync(jsPath)) {
     try {
-      const handler = require(jsPath);
-      // Express mounted on /api keeps req.query populated
-      await handler(req, res);
+      await routeResult.handler(req, res);
     } catch (err) {
       console.error('Error running API handler:', err);
-      res.status(500).json({ error: 'Internal server error from local proxy.' });
+      return res.status(500).json({ error: 'Internal server error from local proxy.' });
     }
-  } else {
-    res.status(404).json({ error: 'API route not found' });
-  }
-});
+  });
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Fallback Local API Server listening on http://localhost:${PORT}`);
-});
+  return app;
+}
+
+if (require.main === module) {
+  const PORT = 3000;
+  createApp().listen(PORT, () => {
+    console.log(`Fallback Local API Server listening on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = { createApp, resolveApiRoute, ROUTE_MODULES, API_ROOT };

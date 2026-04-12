@@ -170,6 +170,20 @@ Returns historical data for a specific fund.
 - `kind`: Fund type (YAT, EMK, BYF)
 - `days`: Number of days or 'ybb' for year-to-date
 
+### `GET /api/sync-fintables?secret={CRON_SECRET}&phase={PHASE}`
+Triggers a protected Fintables sync phase for operational refresh jobs.
+
+**Supported phases in Vercel runtime:** `all`, `daily`, `profiles`, `metrics`, `events`  
+**Unsupported in Vercel runtime:** `holdings` (returns a clear `501` response and does not start sync work).
+
+Monthly holdings are synchronized outside Vercel via:
+
+```bash
+python scripts/sync_kap_holdings.py
+```
+
+Use the GitHub Actions workflow that runs `scripts/sync_kap_holdings.py` for production holdings refreshes.
+
 ## 🎯 Usage
 
 1. **Select Fund Type**: Choose between YAT, EMK, or BYF

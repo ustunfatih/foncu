@@ -1,9 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: "Geist", "Inter", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-pixel: "Geist Pixel", "Geist Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --bg: #f6f7ff;
+  --bg-elevated: #ffffff;
+  --surface: #ffffffd9;
+  --surface-strong: #ffffff;
+  --text: #141b34;
+  --text-muted: #5f6b93;
+  --border: #dfe5ff;
+  --primary: #5b68ff;
+  --primary-soft: #e8ebff;
+  --accent: #00c2ff;
+  --success: #00a96b;
+  --warning: #d98b00;
+  --danger: #dc335f;
+  --shadow: 0 12px 30px rgba(39, 55, 130, 0.12);
+  --radius: 14px;
+
+  font-family: var(--font-body);
   line-height: 1.6;
   font-weight: 400;
   color: #1a1a1a;
   background-color: #f5f4f0;
+  color-scheme: light;
+  --bg-page: #f5f4f0;
+  --bg-elevated: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-soft: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-heading: #0b132b;
+  --text-secondary: #1e293b;
+  --color-muted: #475569;
+  --color-muted-soft: #64748b;
+  --border-color: #e2e8f0;
+  --border-strong: #d5dde5;
+  --shadow-color: rgba(15, 23, 42, 0.08);
+  --chip-bg: #f8fafc;
+  --chip-active-bg: #e0ecff;
+  --chip-active-text: #1d4ed8;
+  --badge-bg: #e0ecff;
+  --badge-text: #1d4ed8;
+  --tab-hover-bg: #f8fafc;
+  --input-bg: #ffffff;
+  --table-header-bg: #f8fafc;
+  --error-surface: #fef2f2;
+  --error-border: #fecaca;
+  --error-text: #dc2626;
+  --warning-surface: #fff8e1;
+  --warning-border: #ffe082;
+  --warning-text: #92400e;
+  --success-bg: #dcfce7;
+  --success-text: #16a34a;
+  --danger-bg: #fee2e2;
+  --danger-text: #dc2626;
+  --neutral-strong-bg: #e5e7eb;
+  --focus-ring: rgba(37, 99, 235, 0.15);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-page: #0f172a;
+  --bg-elevated: #111c33;
+  --surface-muted: #162235;
+  --surface-soft: #1b2a41;
+  --text-primary: #e5eefc;
+  --text-heading: #f8fafc;
+  --text-secondary: #d5e1f4;
+  --color-muted: #a8bad2;
+  --color-muted-soft: #90a3bf;
+  --border-color: #223451;
+  --border-strong: #32486a;
+  --shadow-color: rgba(2, 6, 23, 0.5);
+  --chip-bg: #162235;
+  --chip-active-bg: rgba(37, 99, 235, 0.2);
+  --chip-active-text: #93c5fd;
+  --badge-bg: rgba(37, 99, 235, 0.2);
+  --badge-text: #93c5fd;
+  --tab-hover-bg: #162235;
+  --input-bg: #0b1424;
+  --table-header-bg: #162235;
+  --error-surface: rgba(127, 29, 29, 0.24);
+  --error-border: rgba(248, 113, 113, 0.3);
+  --error-text: #fca5a5;
+  --warning-surface: rgba(120, 53, 15, 0.22);
+  --warning-border: rgba(251, 191, 36, 0.3);
+  --warning-text: #fcd34d;
+  --success-bg: rgba(22, 163, 74, 0.2);
+  --success-text: #86efac;
+  --danger-bg: rgba(220, 38, 38, 0.2);
+  --danger-text: #fca5a5;
+  --neutral-strong-bg: #223451;
+  --focus-ring: rgba(96, 165, 250, 0.18);
 }
 
 * {
@@ -12,7 +104,9 @@
 
 body {
   margin: 0;
-  background: #f5f4f0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #root {
@@ -37,21 +131,21 @@ body {
   font-size: 24px;
   font-weight: 700;
   margin: 0;
-  color: #0b132b;
+  color: var(--text-heading);
 }
 
 .subtitle {
   margin: 4px 0 0;
-  color: #475569;
+  color: var(--color-muted);
   font-size: 15px;
 }
 
 .card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 8px 20px var(--shadow-color);
 }
 
 .grid {
@@ -70,11 +164,11 @@ body {
 .metric-value {
   font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .metric-label {
-  color: #64748b;
+  color: var(--color-muted-soft);
   margin-top: 4px;
 }
 
@@ -82,7 +176,7 @@ body {
   font-size: 18px;
   font-weight: 700;
   margin: 0 0 12px;
-  color: #0f172a;
+  color: var(--text-primary);
 }
 
 .chip-group {
@@ -94,9 +188,9 @@ body {
 .chip {
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #0f172a;
+  border: 1px solid var(--border-color);
+  background: var(--chip-bg);
+  color: var(--text-primary);
   cursor: pointer;
   font-weight: 600;
   transition: all 0.15s ease;
@@ -104,15 +198,20 @@ body {
 
 .chip.active {
   border-color: #2563eb;
-  background: #e0ecff;
-  color: #1d4ed8;
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+}
+
+.theme-toggle {
+  min-width: 110px;
+  justify-content: center;
 }
 
 .github-login-btn {
   padding: 10px 16px;
   border-radius: 8px;
   border: none;
-  background: #2d3748;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
   color: #ffffff;
   cursor: pointer;
   font-weight: 600;
@@ -124,13 +223,13 @@ body {
 }
 
 .github-login-btn:hover {
-  background: #1a202c;
+  filter: brightness(1.05);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow);
 }
 
 .github-login-btn:disabled {
-  background: #94a3b8;
+  background: #95a1d6;
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
@@ -144,8 +243,9 @@ body {
 .input {
   padding: 12px;
   border-radius: 10px;
-  border: 1px solid #d5dde5;
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--input-bg);
+  color: var(--text-primary);
   width: 100%;
   font-size: 15px;
   transition: border-color 0.2s ease;
@@ -154,7 +254,7 @@ body {
 .input:focus {
   outline: none;
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .selector-panel {
@@ -173,15 +273,15 @@ body {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   max-height: 220px;
   overflow: auto;
   list-style: none;
   padding: 8px 0;
   margin: 0;
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 30px var(--shadow-color);
   z-index: 10;
 }
 
@@ -194,7 +294,7 @@ body {
 }
 
 .selector-dropdown li:hover {
-  background: #f8fafc;
+  background: var(--surface-muted);
 }
 
 .badge {
@@ -202,25 +302,27 @@ body {
   align-items: center;
   padding: 4px 8px;
   border-radius: 999px;
-  background: #e0ecff;
-  color: #1d4ed8;
+  background: var(--badge-bg);
+  color: var(--badge-text);
   font-weight: 700;
   font-size: 12px;
+  font-family: var(--font-pixel);
+  letter-spacing: 0.02em;
 }
 
 .badge-danger {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 .badge-warning {
-  background: #fef3c7;
-  color: #d97706;
+  background: var(--warning-surface);
+  color: var(--warning-text);
 }
 
 .badge-success {
-  background: #dcfce7;
-  color: #16a34a;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .chart-wrapper {
@@ -261,7 +363,7 @@ body {
 .fund-card-code {
   font-weight: 700;
   font-size: 0.95rem;
-  color: #000000;
+  color: var(--text-primary);
   padding: 3px 8px;
   border-radius: 5px;
 }
@@ -269,8 +371,8 @@ body {
 .fund-card-sharpe {
   font-weight: 600;
   font-size: 0.75rem;
-  background: #dcfce7;
-  color: #166534;
+  background: var(--success-bg);
+  color: var(--success-text);
   padding: 2px 6px;
   border-radius: 4px;
   cursor: help;
@@ -279,10 +381,10 @@ body {
 .fund-card-price {
   font-weight: 700;
   font-size: 1.045rem;
-  color: #0f172a;
+  color: var(--text-primary);
   margin-bottom: 6px;
   font-family: 'Courier New', monospace;
-  background: #e5e7eb;
+  background: var(--neutral-strong-bg);
   padding: 3px 8px;
   border-radius: 5px;
   display: inline-block;
@@ -292,7 +394,7 @@ body {
 .fund-card-title {
   font-weight: 500;
   font-size: 0.8rem;
-  color: #1e293b;
+  color: var(--text-secondary);
   line-height: 1.25;
   word-wrap: break-word;
   overflow-wrap: break-word;
@@ -304,14 +406,14 @@ body {
   border: none;
   font-size: 1.5rem;
   line-height: 1;
-  color: #94a3b8;
+  color: var(--color-muted-soft);
   cursor: pointer;
   padding: 0 4px;
   transition: color 0.2s;
 }
 
 .remove-btn:hover {
-  color: #dc2626;
+  color: var(--danger-text);
 }
 
 .filter-group {
@@ -331,7 +433,7 @@ body {
 .filter-label {
   font-weight: 600;
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--color-muted);
   min-width: 100px;
 }
 
@@ -357,7 +459,7 @@ body {
 }
 
 .checklist-item.active {
-  background: #e2e8f0;
+  background: var(--border-color);
 }
 
 .checklist-checkbox {
@@ -370,16 +472,48 @@ body {
   font-family: monospace;
   font-weight: 700;
   font-size: 1rem;
-  color: #1e293b;
+  color: var(--text-secondary);
+}
+
+.checklist-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checklist-title {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(70vw, 520px);
+}
+
+.checklist-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checklist-title {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(70vw, 520px);
 }
 
 .checklist-item.selected {
-  background: #f1f5f9;
+  background: var(--surface-soft);
 }
 
 .no-matches {
   padding: 12px;
-  color: #64748b;
+  color: var(--color-muted-soft);
   text-align: center;
 }
 
@@ -391,8 +525,8 @@ body {
 }
 
 .analytics-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
   border-left: 4px solid #2563eb;
@@ -401,7 +535,7 @@ body {
 .analytics-fund-code {
   font-weight: 700;
   font-size: 0.95rem;
-  color: #1d4ed8;
+  color: var(--chip-active-text);
   margin-bottom: 8px;
 }
 
@@ -419,32 +553,32 @@ body {
 }
 
 .analytics-label {
-  color: #64748b;
+  color: var(--color-muted-soft);
   font-weight: 500;
 }
 
 .analytics-value {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
   font-family: 'Courier New', monospace;
 }
 
 .analytics-value.negative {
-  color: #dc2626;
+  color: var(--danger-text);
 }
 /* Tab Navigation */
 .tabs {
   display: flex;
   gap: 4px;
   margin-bottom: 24px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--border-color);
 }
 
 .tab {
   padding: 12px 24px;
   border: none;
   background: none;
-  color: #64748b;
+  color: var(--color-muted-soft);
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
@@ -455,7 +589,7 @@ body {
 
 .tab:hover {
   color: #2563eb;
-  background: #f8fafc;
+  background: var(--tab-hover-bg);
 }
 
 .tab.active {
@@ -475,19 +609,19 @@ body {
 }
 
 .error-banner {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--error-surface);
+  border: 1px solid var(--error-border);
   border-radius: 8px;
   padding: 12px 16px;
-  color: #dc2626;
+  color: var(--error-text);
   margin-bottom: 16px;
   font-weight: 500;
 }
 
 .alert-message {
   margin-top: 8px;
-  color: #991b1b;
-  background: #fee2e2;
+  color: var(--error-text);
+  background: var(--danger-bg);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 0.85rem;
@@ -510,14 +644,15 @@ body {
 .table th,
 .table td {
   padding: 10px 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
   text-align: left;
+  color: var(--text-primary);
 }
 
 .table th {
   font-weight: 600;
-  color: #0f172a;
-  background: #f8fafc;
+  color: var(--text-primary);
+  background: var(--table-header-bg);
 }
 
 .fund-selection-grid {
@@ -527,7 +662,7 @@ body {
   max-height: 300px;
   overflow-y: auto;
   padding: 8px;
-  background: #f8fafc;
+  background: var(--surface-muted);
   border-radius: 8px;
 }
 
@@ -541,7 +676,7 @@ body {
 }
 
 .checkbox-label:hover {
-  background: #e2e8f0;
+  background: var(--border-color);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -560,7 +695,7 @@ body {
   display: block;
   font-weight: 600;
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--color-muted);
   margin-bottom: 6px;
 }
 
@@ -586,7 +721,7 @@ body {
 }
 
 .radio-label:hover {
-  background: #f8fafc;
+  background: var(--surface-muted);
 }
 
 .radio-label input[type="radio"] {
@@ -623,7 +758,7 @@ body {
 .progress-bar-container {
   width: 100%;
   height: 8px;
-  background: #e2e8f0;
+  background: var(--border-color);
   border-radius: 4px;
   overflow: hidden;
   margin-top: 12px;

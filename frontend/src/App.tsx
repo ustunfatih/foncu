@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FundSelector from './components/FundSelector';
 import FundCard from './components/FundCard';
 import PerformanceChart from './components/PerformanceChart';
@@ -53,6 +53,8 @@ const fundKinds: { label: string; value: FundKind }[] = [
 const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 
 const SELECTED_CODES_KEY = 'foncu_selectedCodes';
+const THEME_STORAGE_KEY = 'foncu_theme';
+type ThemeMode = 'light' | 'dark';
 
 const App = () => {
   // Read URL params on mount to support deep-linking into Örtüşme tab
@@ -84,12 +86,21 @@ const App = () => {
       return [];
     }
   });
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    try {
+      return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
   const [activeTimeFilter, setActiveTimeFilter] = useState(timeFilters[3]); // 3M default
   const [activeMetric, setActiveMetric] = useState(metricFilters[0]); // Price default
   const [loadingFunds, setLoadingFunds] = useState(true);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const hasUserTouchedSelectionRef = useRef(false);
+  const hasHydratedPortfolioRef = useRef(false);
   const { user, signInWithGithub, signOut } = useAuth();
   const isAuthEnabled = isSupabaseConfigured;
 
@@ -114,18 +125,26 @@ const App = () => {
   // Load portfolio from Supabase on login
   useEffect(() => {
     if (!isAuthEnabled || !user) return;
+    hasHydratedPortfolioRef.current = false;
+
     const loadPortfolio = async () => {
       const { data } = await supabase
         .from('portfolios')
         .select('fund_list')
         .eq('user_id', user.id)
         .single();
-      if (data?.fund_list && Array.isArray(data.fund_list)) {
+
+      if (hasHydratedPortfolioRef.current || hasUserTouchedSelectionRef.current) {
+        return;
+      }
+
+      if (data?.fund_list && Array.isArray(data.fund_list) && selectedCodes.length === 0) {
         setSelectedCodes(data.fund_list);
       }
+      hasHydratedPortfolioRef.current = true;
     };
     loadPortfolio();
-  }, [isAuthEnabled, user]);
+  }, [isAuthEnabled, user, selectedCodes.length]);
 
   // Persist selected codes to localStorage on every change
   useEffect(() => {
@@ -135,6 +154,27 @@ const App = () => {
       // ignore storage errors
     }
   }, [selectedCodes]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY) return;
+      setTheme(event.newValue === 'dark' ? 'dark' : 'light');
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   // Fetch fund list on mount or when kind changes
   useEffect(() => {
@@ -199,12 +239,14 @@ const App = () => {
   }, [selectedCodes, activeTimeFilter.days, activeMetric.key, refreshKey]);
 
   const handleConfirmFundKind = useCallback(() => {
+    hasUserTouchedSelectionRef.current = true;
     setFundKind(pendingFundKind);
     setSelectedCodes([]);
     setSelectedFunds([]);
   }, [pendingFundKind]);
 
   const handleFundSelect = useCallback((fund: FundSummary) => {
+    hasUserTouchedSelectionRef.current = true;
     setSelectedCodes((prev) =>
       prev.some(s => s.code === fund.code)
         ? prev.filter((s) => s.code !== fund.code)
@@ -215,12 +257,24 @@ const App = () => {
   }, []);
 
   const handleRemoveFund = useCallback((code: string) => {
+    hasUserTouchedSelectionRef.current = true;
     setSelectedCodes(prev => prev.filter(s => s.code !== code));
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    hasUserTouchedSelectionRef.current = true;
+    setSelectedCodes([]);
+    setSelectedFunds([]);
+    setProfileDrawerCode(null);
   }, []);
 
   const handleRefresh = useCallback(() => {
     setSelectedFunds([]); // Clear cached fund data to force refetch
     setRefreshKey(k => k + 1); // Trigger useEffect
+  }, []);
+
+  const handleThemeToggle = useCallback(() => {
+    setTheme((currentTheme) => currentTheme === 'light' ? 'dark' : 'light');
   }, []);
 
   const getDaysForYBB = () => {
@@ -318,7 +372,7 @@ const App = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {user ? (
             <>
-              <span style={{ fontSize: 14, color: '#64748b' }}>{user.email || user.user_metadata?.user_name}</span>
+              <span style={{ fontSize: 14, color: 'var(--color-muted)' }}>{user.email || user.user_metadata?.user_name}</span>
               <button className="chip active" onClick={savePortfolio} disabled={selectedCodes.length === 0}>
                 💾 Kaydet
               </button>
@@ -337,7 +391,15 @@ const App = () => {
               GitHub ile Giriş
             </button>
           )}
-          <div className="badge">Tefas Crawler Engine</div>
+          <button
+            type="button"
+            className={`chip theme-toggle ${theme === 'dark' ? 'active' : ''}`}
+            onClick={handleThemeToggle}
+            aria-pressed={theme === 'dark'}
+            title={theme === 'dark' ? 'Koyu tema açık' : 'Açık tema açık'}
+          >
+            {theme === 'dark' ? 'Koyu Tema' : 'Açık Tema'}
+          </button>
         </div>
       </header>
 
@@ -412,8 +474,8 @@ const App = () => {
       {activeTab === 'home' && (
         <>
           {error && (
-            <div className="card" style={{ background: '#fef2f2', borderColor: '#fecaca', marginBottom: 16 }}>
-              <p style={{ color: '#dc2626', margin: 0 }}>Error: {error}</p>
+            <div className="card" style={{ background: 'var(--error-surface)', borderColor: 'var(--error-border)', marginBottom: 16 }}>
+              <p style={{ color: 'var(--error-text)', margin: 0 }}>Error: {error}</p>
             </div>
           )}
 
@@ -437,6 +499,14 @@ const App = () => {
                   style={{ marginLeft: 8, opacity: pendingFundKind === fundKind ? 0.45 : 1 }}
                 >
                   {loadingFunds ? 'Yükleniyor...' : 'Fonları Yükle'}
+                </button>
+                <button
+                  className="chip badge-danger"
+                  onClick={handleClearSelection}
+                  disabled={selectedCodes.length === 0 && selectedFunds.length === 0}
+                  style={{ marginLeft: 8 }}
+                >
+                  Seçimi Temizle
                 </button>
               </div>
             </div>
@@ -581,8 +651,8 @@ const App = () => {
               </div>
             </>
           ) : (
-            <div className="card" style={{ textAlign: 'center', padding: '60px', background: '#f8fafc' }}>
-              <p style={{ color: '#64748b', fontSize: '1.1rem' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '60px', background: 'var(--surface-muted)' }}>
+              <p style={{ color: 'var(--color-muted-soft)', fontSize: '1.1rem' }}>
                 Select up to 5 funds to start tracking their performance.
               </p>
             </div>
