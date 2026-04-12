@@ -1,11 +1,12 @@
-const supabase = require('./_lib/supabase');
 const { fetchFundHistory } = require('./_lib/history');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 const {
   calculateSharpeRatio,
   calculateVolatility,
   calculateMaxDrawdown,
   calculateReturn,
 } = require('./_lib/analytics');
+const { ValidationError, parsePositiveInt } = require('./_lib/validation');
 
 const getDateOffset = (days) => {
   const end = new Date();
@@ -17,12 +18,16 @@ const getDateOffset = (days) => {
 };
 
 module.exports = async function handler(req, res) {
+  if (!ensureSupabase(res)) return;
+
   try {
-    if (!supabase) {
-      return res.status(503).json({ error: 'Supabase not configured' });
-    }
     const code = (req.query.code || '').toString().trim().toUpperCase();
-    const days = Number(req.query.days) || 365;
+    const days = parsePositiveInt(req.query.days, {
+      paramName: 'days',
+      min: 30,
+      max: 365 * 5,
+      defaultValue: 365,
+    });
     if (!code) {
       return res.status(400).json({ error: 'Missing code parameter' });
     }
@@ -48,6 +53,9 @@ module.exports = async function handler(req, res) {
       metrics,
     });
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return res.status(400).json({ error: error.message });
+    }
     console.error('[fund-risk] failed', error);
     return res.status(500).json({ error: 'Failed to load fund risk' });
   }
