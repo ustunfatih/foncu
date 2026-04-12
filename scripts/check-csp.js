@@ -54,5 +54,3 @@ for (const token of scriptSrc) {
     fail(`script-src contains a forbidden wildcard/scheme token: ${token}`);
   }
 }
-
-console.log('CSP check passed.');
