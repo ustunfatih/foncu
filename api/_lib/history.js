@@ -49,9 +49,7 @@ const fetchFundHistory = async (code, startDate, endDate) => {
 
 const fetchFundHistoryBatch = async (codes, startDate, endDate) => {
   if (!supabase || !Array.isArray(codes) || codes.length === 0) return {};
-  const normalizedCodes = codes
-    .map(normalizeCode)
-    .filter((code, index, array) => code && array.indexOf(code) === index);
+  const normalizedCodes = [...new Set(codes.map(normalizeCode))].filter(Boolean);
   if (normalizedCodes.length === 0) return {};
 
   const data = await fetchPagedRows(() => (
@@ -106,9 +104,7 @@ const fetchLatestPrice = async (code) => {
 
 const fetchLatestPriceBatch = async (codes) => {
   if (!supabase || !Array.isArray(codes) || codes.length === 0) return {};
-  const normalizedCodes = codes
-    .map(normalizeCode)
-    .filter((code, index, array) => code && array.indexOf(code) === index);
+  const normalizedCodes = [...new Set(codes.map(normalizeCode))].filter(Boolean);
 
   if (normalizedCodes.length === 0) return {};
 
