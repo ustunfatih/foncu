@@ -20,10 +20,12 @@ const BenchmarkPage = () => {
       setLoadingFunds(true);
       setError(null);
       const data = await fetchFunds('BYF');
-      setFunds(data);
-      if (data.length >= 2) {
-        setBaseCode(data[0].code);
-        setBenchmarkCode(data[1].code);
+      // Filter out funds with .F suffix as they may not have price data
+      const validFunds = data.filter(f => !f.code.endsWith('.F'));
+      setFunds(validFunds);
+      if (validFunds.length >= 2) {
+        setBaseCode(validFunds[0].code);
+        setBenchmarkCode(validFunds[1].code);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load funds');
@@ -41,12 +43,35 @@ const BenchmarkPage = () => {
     try {
       setLoadingChart(true);
       setError(null);
-      const [base, benchmark] = await Promise.all([
-        fetchFundDetails(baseCode, 'BYF', 365),
-        fetchFundDetails(benchmarkCode, 'BYF', 365),
-      ]);
-      setBaseFund(base);
-      setBenchmarkFund(benchmark);
+      
+      let baseFundData: FundOverview | null = null;
+      let benchmarkFundData: FundOverview | null = null;
+      
+      try {
+        const baseData = await fetchFundDetails(baseCode, 'BYF', 365);
+        baseFundData = baseData;
+      } catch (e) {
+        console.error('Failed to load base fund:', e);
+      }
+      
+      try {
+        const benchmarkData = await fetchFundDetails(benchmarkCode, 'BYF', 365);
+        benchmarkFundData = benchmarkData;
+      } catch (e) {
+        console.error('Failed to load benchmark fund:', e);
+      }
+      
+      if (!baseFundData && !benchmarkFundData) {
+        setError('Failed to load fund data');
+        return;
+      }
+      
+      setBaseFund(baseFundData);
+      setBenchmarkFund(benchmarkFundData);
+      
+      if (!baseFundData || !benchmarkFundData) {
+        setError('Some funds have no price data. Please try different funds.');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load benchmark');
     } finally {
@@ -156,11 +181,14 @@ const BenchmarkPage = () => {
 
       {loadingChart ? (
         <ChartSkeleton />
-      ) : baseFund && benchmarkFund ? (
+      ) : baseFund || benchmarkFund ? (
         <PerformanceChart
           data={chartData}
           metricLabel="Benchmark"
-          selectedCodes={[baseFund.code, benchmarkFund.code]}
+          selectedCodes={[
+            ...(baseFund ? [baseFund.code] : []),
+            ...(benchmarkFund ? [benchmarkFund.code] : [])
+          ]}
           isNormalized
         />
       ) : funds.length < 2 ? (
