@@ -15,6 +15,8 @@ const MACRO_INDICATORS: MacroIndicator[] = [
   { id: 'USDTRY', label: 'USD/TRY', color: '#2563eb' },
   { id: 'EURTRY', label: 'EUR/TRY', color: '#16a34a' },
   { id: 'GBPTRY', label: 'GBP/TRY', color: '#d97706' },
+  { id: 'GOLD', label: 'Altın (ONS)', color: '#fbbf24', unit: 'USD' },
+  { id: 'BRENT', label: 'Brent Petrol', color: '#dc2626', unit: 'USD' },
 ];
 
 const TIME_RANGES = [

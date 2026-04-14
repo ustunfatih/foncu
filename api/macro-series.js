@@ -2,6 +2,8 @@ const SYMBOL_MAP = {
   USDTRY: { type: 'forex', source: 'frankfurter', config: { base: 'USD', symbols: 'TRY' } },
   EURTRY: { type: 'forex', source: 'frankfurter', config: { base: 'EUR', symbols: 'TRY' } },
   GBPTRY: { type: 'forex', source: 'frankfurter', config: { base: 'GBP', symbols: 'TRY' } },
+  GOLD: { type: 'commodity', source: 'gold' },
+  BRENT: { type: 'commodity', source: 'brent' },
 };
 
 const buildRange = (days) => {
@@ -35,6 +37,40 @@ const fetchFromFrankfurter = async (config, startStr, endStr) => {
     .filter((point) => point.value > 0);
 };
 
+const fetchGoldPrice = async () => {
+  try {
+    const response = await fetch('https://api.metalpriceapi.com/v1/latest?api_key=demo&currency=TRY&unit=toz&currency=TRY&unit=oz', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.rates?.XAU) {
+      const today = new Date().toISOString().split('T')[0];
+      return [{ date: today, value: data.rates.XAU }];
+    }
+    return null;
+  } catch (e) {
+    console.error('Gold API error:', e);
+    return null;
+  }
+};
+
+const fetchBrentPrice = async () => {
+  try {
+    const response = await fetch('https://api.twelvedata.com/time_series?symbol=BCO/USD&interval=1day&apikey=demo&outputsize=1', { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.values && data.values.length > 0) {
+      return [{
+        date: data.values[0].datetime,
+        value: parseFloat(data.values[0].close)
+      }];
+    }
+    return null;
+  } catch (e) {
+    console.error('Brent API error:', e);
+    return null;
+  }
+};
+
 module.exports = async function handler(req, res) {
   try {
     const symbol = (req.query.symbol || 'USDTRY').toString().toUpperCase();
@@ -49,8 +85,21 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const series = await fetchFromFrankfurter(config.config, startStr, endStr);
-    const source = 'frankfurter.app';
+    let series = [];
+    let source = '';
+
+    if (config.source === 'frankfurter') {
+      series = await fetchFromFrankfurter(config.config, startStr, endStr);
+      source = 'frankfurter.app';
+    } else if (config.source === 'gold') {
+      const goldData = await fetchGoldPrice();
+      series = goldData || [];
+      source = 'metalpriceapi.com';
+    } else if (config.source === 'brent') {
+      const brentData = await fetchBrentPrice();
+      series = brentData || [];
+      source = 'twelvedata.com';
+    }
 
     return res.status(200).json({
       symbol,
