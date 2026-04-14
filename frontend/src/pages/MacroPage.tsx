@@ -15,19 +15,12 @@ const MACRO_INDICATORS: MacroIndicator[] = [
   { id: 'USDTRY', label: 'USD/TRY', color: '#2563eb' },
   { id: 'EURTRY', label: 'EUR/TRY', color: '#16a34a' },
   { id: 'GBPTRY', label: 'GBP/TRY', color: '#d97706' },
-  { id: 'GOLD', label: 'Altın ( gram)', color: '#fbbf24', unit: 'TL' },
-  { id: 'BRENT', label: 'Brent Petrol', color: '#dc2626', unit: 'USD' },
-  { id: 'BIST100', label: 'BIST 100', color: '#9333ea' },
-  { id: 'CBOND', label: 'Tahvil (2Y)', color: '#0891b2', unit: '%' },
 ];
 
 const TIME_RANGES = [
   { label: '1A', days: 365 },
   { label: '3A', days: 365 * 3 },
   { label: '6A', days: 180 },
-  { label: '1Y', days: 365 },
-  { label: '3Y', days: 365 * 3 },
-  { label: '5Y', days: 365 * 5 },
 ];
 
 const MacroPage = () => {
