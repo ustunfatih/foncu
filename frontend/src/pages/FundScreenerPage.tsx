@@ -10,6 +10,19 @@ const FON_TIPI_LABELS: Record<string, string> = {
   exchange: 'BYF',
 };
 
+const FON_KATEGORILER = [
+  '',
+  'Değişken Şemsiye Fonu',
+  'Para Piyasası Şemsiye Fonu',
+  'Serbest Şemsiye Fonu',
+  'Hisse Senedi Şemsiye Fonu',
+  'Fon Sepeti Şemsiye Fonu',
+  'Kıymetli Madenler Şemsiye Fonu',
+  'Borçlanma Araçları Şemsiye Fonu',
+  'Katılım Şemsiye Fonu',
+  'Karma Şemsiye Fonu',
+];
+
 const RSI_SINYAL_LABELS: Record<string, string> = {
   guclu_al: 'Güçlü Al',
   al: 'Al',
@@ -194,8 +207,11 @@ const FundScreenerPage = () => {
 
               <label style={labelStyle}>
                 Fon Kategorisi
-                <input style={inputStyle} type="text" placeholder="Örn: Hisse Senedi"
-                  value={fonKategorisi} onChange={e => setFonKategorisi(e.target.value)} />
+                <select style={inputStyle} value={fonKategorisi} onChange={e => setFonKategorisi(e.target.value)}>
+                  {FON_KATEGORILER.map(kat => (
+                    <option key={kat} value={kat}>{kat || 'Tümü'}</option>
+                  ))}
+                </select>
               </label>
 
               <label style={labelStyle}>
@@ -251,8 +267,7 @@ const FundScreenerPage = () => {
                 <select style={inputStyle} value={stopaj} onChange={e => setStopaj(e.target.value)}>
                   <option value="">Tümü</option>
                   <option value="0">%0</option>
-                  <option value="10">%10</option>
-                  <option value="15">%15</option>
+                  <option value="17.5">%17.5</option>
                 </select>
               </label>
 
