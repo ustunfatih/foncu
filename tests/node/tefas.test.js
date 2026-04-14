@@ -1,6 +1,21 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { toISO } = require('../../api/_lib/tefas');
+const { toISO, fetchAnalyzeData } = require('../../api/_lib/tefas');
+
+test('fetchAnalyzeData rejects if code is missing', async () => {
+  await assert.rejects(
+    () => fetchAnalyzeData(),
+    { message: 'fund code is required for TEFAS analyze data' }
+  );
+  await assert.rejects(
+    () => fetchAnalyzeData(''),
+    { message: 'fund code is required for TEFAS analyze data' }
+  );
+  await assert.rejects(
+    () => fetchAnalyzeData('   '),
+    { message: 'fund code is required for TEFAS analyze data' }
+  );
+});
 
 test('toISO converts numeric timestamp to YYYY-MM-DD', () => {
   // 2024-01-01 00:00:00 UTC = 1704067200000

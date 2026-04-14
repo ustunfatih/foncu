@@ -150,11 +150,11 @@ export const fetchMacroSeries = async (symbol = 'USDTRY', days = 365): Promise<M
   return fetchWithTimeout<MacroSeries>(url.toString());
 };
 
-export const fetchTechnicalScan = async (kind: FundKind, rsiBelow = 30) => {
+export const fetchTechnicalScan = async (kind: FundKind, rsiThreshold = 30) => {
   const apiBase = getApiBase();
   const url = new URL(`${apiBase}/api/fund-technical-scan`);
   url.searchParams.append('kind', kind);
-  url.searchParams.append('rsiBelow', rsiBelow.toString());
+  url.searchParams.append('rsiThreshold', rsiThreshold.toString());
   const payload = await fetchWithTimeout<{ results: TechnicalScanResult[] }>(url.toString());
   return payload.results;
 };

@@ -6,9 +6,17 @@ import ErrorBoundary from './components/ErrorBoundary';
 import './styles.css';
 
 const rootElement = document.getElementById('root');
+const THEME_STORAGE_KEY = 'foncu_theme';
 
 if (!rootElement) {
   throw new Error('Root element not found');
+}
+
+try {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  document.documentElement.dataset.theme = savedTheme === 'dark' ? 'dark' : 'light';
+} catch {
+  document.documentElement.dataset.theme = 'light';
 }
 
 ReactDOM.createRoot(rootElement).render(

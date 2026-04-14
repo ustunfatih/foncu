@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import logging
 import os
 import re
 import subprocess
@@ -28,6 +29,8 @@ from pypdf import PdfReader
 from requests import Response
 
 requests.packages.urllib3.disable_warnings()  # type: ignore[attr-defined]
+
+logger = logging.getLogger(__name__)
 
 PORTFOLIO_REPORT_DISCLOSURE_TYPE = "8aca490d502e34b801502e380044002b"
 KAP_DISCLOSURE_FILTER_URL = "https://kap.org.tr/tr/api/disclosure/filter/FILTERYFBF"
@@ -250,10 +253,9 @@ def request_with_backoff(
                         pass
                 if attempt == attempts - 1:
                     response.raise_for_status()
-                print(
+                logger.warning(
                     f"[rate-limit] {method.upper()} {url} returned {response.status_code}; "
                     f"sleeping {wait_seconds}s before retry {attempt + 2}/{attempts}",
-                    flush=True,
                 )
                 time.sleep(wait_seconds)
                 continue
@@ -264,10 +266,9 @@ def request_with_backoff(
             if attempt == attempts - 1:
                 raise
             wait_seconds = min(rate_limit_wait_seconds, 8 * (attempt + 1))
-            print(
+            logger.warning(
                 f"[retry] {method.upper()} {url} failed with HTTP error; "
                 f"sleeping {wait_seconds}s before retry {attempt + 2}/{attempts}",
-                flush=True,
             )
             time.sleep(wait_seconds)
         except requests.RequestException as exc:
@@ -275,10 +276,9 @@ def request_with_backoff(
             if attempt == attempts - 1:
                 raise
             wait_seconds = min(15, 3 * (attempt + 1))
-            print(
+            logger.warning(
                 f"[retry] {method.upper()} {url} failed with network error; "
                 f"sleeping {wait_seconds}s before retry {attempt + 2}/{attempts}",
-                flush=True,
             )
             time.sleep(wait_seconds)
 
@@ -784,10 +784,9 @@ def persist_batch(
             detail = ""
             if exc.response is not None:
                 detail = exc.response.text[:500]
-            print(
+            logger.warning(
                 f"[warn] failed to update KAP mappings for {len(deduped_mapping_rows)} fund(s): "
                 f"{exc}{f' :: {detail}' if detail else ''}",
-                flush=True,
             )
 
 
@@ -860,10 +859,9 @@ def main() -> int:
 
     total_requested = len(profiles) + len(existing_completed_codes)
     if not profiles:
-        print(
+        logger.info(
             f"All {len(existing_completed_codes)} requested funds already have holdings for "
             f"{month_name(target_year, target_month)}; nothing to do.",
-            flush=True,
         )
         persist_batch(
             supabase_url,
@@ -887,27 +885,24 @@ def main() -> int:
             "holding_rows": existing_holding_rows,
             "elapsed_seconds": 0,
         }
-        print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
+        logger.info(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
 
     batches = chunk_profiles(profiles, args.batch_size)
 
-    print(
+    logger.info(
         f"Syncing KAP holdings for {len(profiles)} TEFAS-tradable mutual funds "
         f"for {month_name(target_year, target_month)}",
-        flush=True,
     )
-    print(f"[scope] latest TEFAS YAT universe contains {len(tefas_codes)} fund codes", flush=True)
+    logger.info(f"[scope] latest TEFAS YAT universe contains {len(tefas_codes)} fund codes")
     if existing_completed_codes:
-        print(
+        logger.info(
             f"[resume] skipping {len(existing_completed_codes)} funds that already have stored holdings "
             f"for {month_name(target_year, target_month)}",
-            flush=True,
         )
-    print(
+    logger.info(
         f"[chunking] processing {len(batches)} batch(es) of up to {max(1, args.batch_size)} funds "
         f"with a {max(0, args.cooldown_seconds)}s cooldown between batches",
-        flush=True,
     )
 
     results: list[dict[str, Any]] = []
@@ -921,9 +916,8 @@ def main() -> int:
         batch_results: list[dict[str, Any]] = []
         batch_holdings: list[dict[str, Any]] = []
         batch_started = time.time()
-        print(
+        logger.info(
             f"[batch {batch_number}/{len(batches)}] starting {len(batch_profiles)} funds",
-            flush=True,
         )
 
         with ThreadPoolExecutor(max_workers=max(1, args.max_workers)) as executor:
@@ -943,7 +937,7 @@ def main() -> int:
                 batch_holdings.extend(result.get("holdings", []))
                 total_completed += 1
 
-                print(
+                logger.info(
                     f"[{total_completed}/{len(profiles)}] [{result['fund_code']}] {result['status']}"
                     + (
                         f" rows={result.get('row_count', 0)} weight={result.get('total_weight', 0)}"
@@ -951,7 +945,6 @@ def main() -> int:
                         else ""
                     )
                     + (f" error={result['error']}" if result.get("error") else ""),
-                    flush=True,
                 )
 
         batch_ok_results = [result for result in batch_results if result["status"] == "ok"]
@@ -974,15 +967,13 @@ def main() -> int:
                 has_failures=any_failures,
             )
 
-        print(
+        logger.info(
             f"[batch {batch_number}/{len(batches)}] completed in {round(time.time() - batch_started, 2)}s"
             f" ok={len(batch_ok_results)} failed={len(batch_failed_results)} holding_rows={len(batch_holdings)}",
-            flush=True,
         )
         if batch_number < len(batches) and args.cooldown_seconds > 0:
-            print(
+            logger.info(
                 f"[batch {batch_number}/{len(batches)}] cooling down for {args.cooldown_seconds}s",
-                flush=True,
             )
             time.sleep(args.cooldown_seconds)
 
@@ -1001,14 +992,15 @@ def main() -> int:
         "holding_rows": total_holding_rows,
         "elapsed_seconds": elapsed,
     }
-    print(json.dumps(summary, ensure_ascii=False, indent=2), flush=True)
+    logger.info(json.dumps(summary, ensure_ascii=False, indent=2))
 
     return 1 if failed_results else 0
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
         raise SystemExit(main())
     except SyncError as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        logger.error(json.dumps({"error": str(exc)}, ensure_ascii=False))
         raise SystemExit(1)

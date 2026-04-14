@@ -1,5 +1,6 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
+const { ensureSupabase } = require('./_lib/supabase-guard');
 
 const PAGE_SIZE = 1000;
 
@@ -35,6 +36,7 @@ async function fetchFundRows({ fon_tipi, tefasOnly = false }) {
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
+  if (!ensureSupabase(res)) return;
 
   try {
     const kind = (req.query.kind || 'YAT').toString().toUpperCase();

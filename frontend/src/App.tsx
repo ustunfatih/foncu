@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FundSelector from './components/FundSelector';
 import FundCard from './components/FundCard';
 import PerformanceChart from './components/PerformanceChart';
-import EmptyState from './components/EmptyState';
-import ErrorState from './components/ErrorState';
 import ExportPage from './pages/ExportPage';
 import FundScreenerPage from './pages/FundScreenerPage';
 import PortfolioPage from './pages/PortfolioPage';
@@ -51,12 +49,15 @@ const fundKinds: { label: string; value: FundKind }[] = [
   { label: 'Borsa Yatırım Fonları (BYF)', value: 'BYF' },
 ];
 
-const fundColors = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)'];
+// Chart colors for funds - matches PerformanceChart.tsx
+const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 
 const SELECTED_CODES_KEY = 'foncu_selectedCodes';
-const THEME_KEY = 'foncu_theme';
+const THEME_STORAGE_KEY = 'foncu_theme';
+type ThemeMode = 'light' | 'dark';
 
 const App = () => {
+  // Read URL params on mount to support deep-linking into Örtüşme tab
   const initialTab = (() => {
     const p = new URLSearchParams(window.location.search).get('tab');
     if (p === 'ortusme') return 'ortusme' as const;
@@ -85,35 +86,25 @@ const App = () => {
       return [];
     }
   });
-  const [activeTimeFilter, setActiveTimeFilter] = useState(timeFilters[3]);
-  const [activeMetric, setActiveMetric] = useState(metricFilters[0]);
-  const [loadingFunds, setLoadingFunds] = useState(true);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+  const [theme, setTheme] = useState<ThemeMode>(() => {
     try {
-      const saved = localStorage.getItem(THEME_KEY);
-      return (saved as 'light' | 'dark') || 'light';
+      return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
     } catch {
       return 'light';
     }
   });
-
+  const [activeTimeFilter, setActiveTimeFilter] = useState(timeFilters[3]); // 3M default
+  const [activeMetric, setActiveMetric] = useState(metricFilters[0]); // Price default
+  const [loadingFunds, setLoadingFunds] = useState(true);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const hasUserTouchedSelectionRef = useRef(false);
+  const hasHydratedPortfolioRef = useRef(false);
   const { user, signInWithGithub, signOut } = useAuth();
   const isAuthEnabled = isSupabaseConfigured;
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {}
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  }, []);
-
+  // Save current selection to Supabase
   const savePortfolio = async () => {
     if (!isAuthEnabled || !user || selectedCodes.length === 0) return;
     try {
@@ -131,27 +122,61 @@ const App = () => {
     }
   };
 
+  // Load portfolio from Supabase on login
   useEffect(() => {
     if (!isAuthEnabled || !user) return;
+    hasHydratedPortfolioRef.current = false;
+
     const loadPortfolio = async () => {
       const { data } = await supabase
         .from('portfolios')
         .select('fund_list')
         .eq('user_id', user.id)
         .single();
-      if (data?.fund_list && Array.isArray(data.fund_list)) {
+
+      if (hasHydratedPortfolioRef.current || hasUserTouchedSelectionRef.current) {
+        return;
+      }
+
+      if (data?.fund_list && Array.isArray(data.fund_list) && selectedCodes.length === 0) {
         setSelectedCodes(data.fund_list);
       }
+      hasHydratedPortfolioRef.current = true;
     };
     loadPortfolio();
-  }, [isAuthEnabled, user]);
+  }, [isAuthEnabled, user, selectedCodes.length]);
 
+  // Persist selected codes to localStorage on every change
   useEffect(() => {
     try {
       localStorage.setItem(SELECTED_CODES_KEY, JSON.stringify(selectedCodes));
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, [selectedCodes]);
 
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY) return;
+      setTheme(event.newValue === 'dark' ? 'dark' : 'light');
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // Fetch fund list on mount or when kind changes
   useEffect(() => {
     const loadFunds = async () => {
       try {
@@ -168,9 +193,13 @@ const App = () => {
     loadFunds();
   }, [fundKind]);
 
+  // Load fund details when selection changes or range changes
   useEffect(() => {
     const loadNewDetails = async () => {
+      // Determine the actual number of days for 'YBB'
       const daysParam = activeTimeFilter.days === 'ybb' ? getDaysForYBB() : (activeTimeFilter.days as number);
+
+      // Find codes that don't have details yet or need updating due to range change
       const toFetch = selectedCodes.filter(
         ({ code }) => {
           const existingFund = selectedFunds.find((f) => f.code === code);
@@ -210,12 +239,14 @@ const App = () => {
   }, [selectedCodes, activeTimeFilter.days, activeMetric.key, refreshKey]);
 
   const handleConfirmFundKind = useCallback(() => {
+    hasUserTouchedSelectionRef.current = true;
     setFundKind(pendingFundKind);
     setSelectedCodes([]);
     setSelectedFunds([]);
   }, [pendingFundKind]);
 
   const handleFundSelect = useCallback((fund: FundSummary) => {
+    hasUserTouchedSelectionRef.current = true;
     setSelectedCodes((prev) =>
       prev.some(s => s.code === fund.code)
         ? prev.filter((s) => s.code !== fund.code)
@@ -226,12 +257,24 @@ const App = () => {
   }, []);
 
   const handleRemoveFund = useCallback((code: string) => {
+    hasUserTouchedSelectionRef.current = true;
     setSelectedCodes(prev => prev.filter(s => s.code !== code));
   }, []);
 
-  const handleRefresh = useCallback(() => {
+  const handleClearSelection = useCallback(() => {
+    hasUserTouchedSelectionRef.current = true;
+    setSelectedCodes([]);
     setSelectedFunds([]);
-    setRefreshKey(k => k + 1);
+    setProfileDrawerCode(null);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setSelectedFunds([]); // Clear cached fund data to force refetch
+    setRefreshKey(k => k + 1); // Trigger useEffect
+  }, []);
+
+  const handleThemeToggle = useCallback(() => {
+    setTheme((currentTheme) => currentTheme === 'light' ? 'dark' : 'light');
   }, []);
 
   const getDaysForYBB = () => {
@@ -247,6 +290,7 @@ const App = () => {
     const days = activeTimeFilter.days === 'ybb' ? getDaysForYBB() : (activeTimeFilter.days as number);
     const dateMap: Record<string, Record<string, number>> = {};
 
+    // Helper to calculate Simple Moving Average on FULL data using sliding window O(n)
     const calculateSMA = (data: HistoricalPoint[], period: number): Map<string, number> => {
       const result = new Map<string, number>();
       if (data.length < period) return result;
@@ -266,12 +310,16 @@ const App = () => {
       const history = fund[activeMetric.key as keyof FundOverview] as HistoricalPoint[];
       if (!history || history.length === 0) return;
 
+      // Calculate MAs on FULL history data (not sliced)
       const ma50Map = showMA ? calculateSMA(history, 50) : null;
       const ma200Map = showMA ? calculateSMA(history, 200) : null;
 
+      // Now slice for display
       const startIndex = Math.max(history.length - (days || 1), 0);
       const slice = history.slice(startIndex);
       const baseValue = slice[0]?.value;
+
+      // For normalized MA, we need the base MA value at the start of the slice
       const baseMa50 = ma50Map?.get(slice[0]?.date) ?? null;
       const baseMa200 = ma200Map?.get(slice[0]?.date) ?? null;
 
@@ -285,6 +333,7 @@ const App = () => {
           dateMap[dateStr][fund.code] = point.value;
         }
 
+        // Add MA values if enabled (from full history calculation)
         if (showMA && ma50Map) {
           const ma50Value = ma50Map.get(dateStr);
           if (ma50Value !== undefined) {
@@ -313,77 +362,21 @@ const App = () => {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [selectedFunds, activeTimeFilter, activeMetric, isNormalized, showMA]);
 
-  const tabs = [
-    { id: 'home', label: 'Anasayfa', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg> },
-    { id: 'screener', label: 'Fon Tarayıcı', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> },
-    { id: 'portfolio', label: 'Portföy', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> },
-    { id: 'benchmark', label: 'Benchmark', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg> },
-    { id: 'macro', label: 'Makro', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> },
-    { id: 'technical', label: 'Teknik Tarama', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
-    { id: 'events', label: 'Takvim', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-    { id: 'export', label: 'Export', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> },
-    { id: 'ortusme', label: 'Örtüşme ✦', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg> },
-  ] as const;
-
   return (
     <div className="container">
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      
       <header className="page-header">
         <div>
-          <h1 className="title" style={{ marginBottom: '4px' }}>TEFAS Fund Dashboard</h1>
+          <p className="title">TEFAS Fund Dashboard</p>
           <p className="subtitle">Interactive performance tracking for multiple investment funds</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button 
-            className="theme-toggle" 
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-            title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-          >
-            <span className="moon-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            </span>
-            <span className="sun-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="5"/>
-                <line x1="12" y1="1" x2="12" y2="3"/>
-                <line x1="12" y1="21" x2="12" y2="23"/>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                <line x1="1" y1="12" x2="3" y2="12"/>
-                <line x1="21" y1="12" x2="23" y2="12"/>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-              </svg>
-            </span>
-          </button>
-          
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {user ? (
             <>
-              <span style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>{user.email || user.user_metadata?.user_name}</span>
-              <button 
-                className="chip active" 
-                onClick={savePortfolio} 
-                disabled={selectedCodes.length === 0}
-                aria-label="Save portfolio"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                  <polyline points="17 21 17 13 7 13 7 21"/>
-                  <polyline points="7 3 7 8 15 8"/>
-                </svg>
-                Kaydet
+              <span style={{ fontSize: 14, color: 'var(--color-muted)' }}>{user.email || user.user_metadata?.user_name}</span>
+              <button className="chip active" onClick={savePortfolio} disabled={selectedCodes.length === 0}>
+                💾 Kaydet
               </button>
-              <button 
-                className="chip" 
-                onClick={signOut}
-                aria-label="Sign out"
-              >
-                Çıkış
-              </button>
+              <button className="chip" onClick={signOut}>Çıkış</button>
             </>
           ) : (
             <button
@@ -391,257 +384,281 @@ const App = () => {
               onClick={signInWithGithub}
               disabled={!isAuthEnabled}
               title={!isAuthEnabled ? 'Supabase ortam değişkenleri eksik.' : 'GitHub ile giriş'}
-              aria-label="Sign in with GitHub"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
               </svg>
               GitHub ile Giriş
             </button>
           )}
-          <div className="badge">Tefas Crawler Engine</div>
+          <button
+            type="button"
+            className={`chip theme-toggle ${theme === 'dark' ? 'active' : ''}`}
+            onClick={handleThemeToggle}
+            aria-pressed={theme === 'dark'}
+            title={theme === 'dark' ? 'Koyu tema açık' : 'Açık tema açık'}
+          >
+            {theme === 'dark' ? 'Koyu Tema' : 'Açık Tema'}
+          </button>
         </div>
       </header>
 
-      <nav className="tabs" role="tablist" aria-label="Main navigation">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            className={`tab ${activeTab === tab.id ? 'active' : ''}`}
-            data-tab={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            aria-controls={`panel-${tab.id}`}
-          >
-            <span className="tab-icon" aria-hidden="true">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
-      </nav>
+      {/* Tab Navigation */}
+      <div className="tabs">
+        <button
+          className={`tab ${activeTab === 'home' ? 'active' : ''}`}
+          onClick={() => setActiveTab('home')}
+        >
+          Anasayfa
+        </button>
+        <button
+          className={`tab ${activeTab === 'screener' ? 'active' : ''}`}
+          onClick={() => setActiveTab('screener')}
+        >
+          Fon Tarayıcı
+        </button>
+        <button
+          className={`tab ${activeTab === 'portfolio' ? 'active' : ''}`}
+          onClick={() => setActiveTab('portfolio')}
+        >
+          Portföy
+        </button>
+        <button
+          className={`tab ${activeTab === 'benchmark' ? 'active' : ''}`}
+          onClick={() => setActiveTab('benchmark')}
+        >
+          Benchmark
+        </button>
+        <button
+          className={`tab ${activeTab === 'macro' ? 'active' : ''}`}
+          onClick={() => setActiveTab('macro')}
+        >
+          Makro
+        </button>
+        <button
+          className={`tab ${activeTab === 'technical' ? 'active' : ''}`}
+          onClick={() => setActiveTab('technical')}
+        >
+          Teknik Tarama
+        </button>
+        <button
+          className={`tab ${activeTab === 'events' ? 'active' : ''}`}
+          onClick={() => setActiveTab('events')}
+        >
+          Takvim
+        </button>
+        <button
+          className={`tab ${activeTab === 'export' ? 'active' : ''}`}
+          onClick={() => setActiveTab('export')}
+        >
+          Export
+        </button>
+        <button
+          className={`tab ${activeTab === 'ortusme' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ortusme')}
+        >
+          Örtüşme ✦
+        </button>
+      </div>
 
-      <main id="main-content" role="main">
-        {error && (
-          <ErrorState 
-            title="Error" 
-            description={error} 
-            onRetry={() => { setError(null); setRefreshKey(k => k + 1); }} 
-          />
-        )}
+      {/* Conditional Page Rendering */}
+      {activeTab === 'export' && <ExportPage fundKind={fundKind} />}
+      {activeTab === 'screener' && <FundScreenerPage />}
+      {activeTab === 'portfolio' && <PortfolioPage />}
+      {activeTab === 'benchmark' && <BenchmarkPage />}
+      {activeTab === 'macro' && <MacroPage />}
+      {activeTab === 'technical' && <TechnicalScannerPage />}
+      {activeTab === 'events' && <EventsPage />}
+      {activeTab === 'ortusme' && <OrtusmeTab initialFunds={overlapFunds} />}
 
-        {activeTab === 'export' && <ExportPage fundKind={fundKind} />}
-        {activeTab === 'screener' && <FundScreenerPage />}
-        {activeTab === 'portfolio' && <PortfolioPage />}
-        {activeTab === 'benchmark' && <BenchmarkPage />}
-        {activeTab === 'macro' && <MacroPage />}
-        {activeTab === 'technical' && <TechnicalScannerPage />}
-        {activeTab === 'events' && <EventsPage />}
-        {activeTab === 'ortusme' && <OrtusmeTab initialFunds={overlapFunds} />}
+      {activeTab === 'home' && (
+        <>
+          {error && (
+            <div className="card" style={{ background: 'var(--error-surface)', borderColor: 'var(--error-border)', marginBottom: 16 }}>
+              <p style={{ color: 'var(--error-text)', margin: 0 }}>Error: {error}</p>
+            </div>
+          )}
 
-        {activeTab === 'home' && (
-          <>
-            <div className="filter-group">
-              <div className="filter-row" style={{ marginBottom: '16px' }}>
-                <span className="filter-label">Fund Type:</span>
+          <div className="filter-group">
+            <div className="filter-row" style={{ marginBottom: 16 }}>
+              <span className="filter-label">Fund Type:</span>
+              <div className="chip-group">
+                {fundKinds.map((kind) => (
+                  <button
+                    key={kind.value}
+                    className={`chip ${pendingFundKind === kind.value ? 'active' : ''}`}
+                    onClick={() => setPendingFundKind(kind.value)}
+                  >
+                    {kind.label}
+                  </button>
+                ))}
+                <button
+                  className={`chip ${pendingFundKind !== fundKind ? 'active' : ''}`}
+                  onClick={handleConfirmFundKind}
+                  disabled={pendingFundKind === fundKind || loadingFunds}
+                  style={{ marginLeft: 8, opacity: pendingFundKind === fundKind ? 0.45 : 1 }}
+                >
+                  {loadingFunds ? 'Yükleniyor...' : 'Fonları Yükle'}
+                </button>
+                <button
+                  className="chip badge-danger"
+                  onClick={handleClearSelection}
+                  disabled={selectedCodes.length === 0 && selectedFunds.length === 0}
+                  style={{ marginLeft: 8 }}
+                >
+                  Seçimi Temizle
+                </button>
+              </div>
+            </div>
+
+            <div className="filter-row">
+              <FundSelector
+                key={fundKind}
+                funds={funds}
+                selectedCodes={selectedCodes.map(s => s.code)}
+                onSelect={handleFundSelect}
+                loading={loadingFunds}
+              />
+            </div>
+
+            <div className="selected-funds-grid">
+              {loadingDetails && selectedCodes.length > selectedFunds.length ? (
+                <>
+                  {selectedFunds.map((fund, index) => (
+                    <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
+                  ))}
+                  {Array.from({ length: selectedCodes.length - selectedFunds.length }).map((_, i) => (
+                    <FundCardSkeleton key={`skeleton-${i}`} />
+                  ))}
+                </>
+              ) : (
+                selectedFunds.map((fund, index) => (
+                  <div key={fund.code} style={{ cursor: 'pointer' }}
+                    onClick={() => { setProfileDrawerCode(fund.code); setProfileDrawerIndex(index); }}>
+                    <FundCard fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="card">
+              <div className="filter-row" style={{ marginBottom: 16 }}>
+                <span className="filter-label">Time Period:</span>
                 <div className="chip-group">
-                  {fundKinds.map((kind) => (
+                  {timeFilters.map((filter) => (
                     <button
-                      key={kind.value}
-                      className={`chip ${pendingFundKind === kind.value ? 'active' : ''}`}
-                      onClick={() => setPendingFundKind(kind.value)}
-                      aria-pressed={pendingFundKind === kind.value}
+                      key={filter.label}
+                      className={`chip ${filter.label === activeTimeFilter.label ? 'active' : ''}`}
+                      onClick={() => setActiveTimeFilter(filter)}
                     >
-                      {kind.label}
+                      {filter.label}
                     </button>
                   ))}
-                  <button
-                    className={`chip ${pendingFundKind !== fundKind ? 'active' : ''}`}
-                    onClick={handleConfirmFundKind}
-                    disabled={pendingFundKind === fundKind || loadingFunds}
-                    style={{ marginLeft: '8px', opacity: pendingFundKind === fundKind ? 0.45 : 1 }}
-                  >
-                    {loadingFunds ? 'Yükleniyor...' : 'Fonları Yükle'}
-                  </button>
+                </div>
+              </div>
+
+              <div className="filter-row" style={{ marginBottom: 16 }}>
+                <span className="filter-label">Metric:</span>
+                <div className="chip-group">
+                  {metricFilters.map((filter) => (
+                    <button
+                      key={filter.label}
+                      className={`chip ${filter.label === activeMetric.label ? 'active' : ''}`}
+                      onClick={() => setActiveMetric(filter)}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               <div className="filter-row">
-                <FundSelector
-                  key={fundKind}
-                  funds={funds}
-                  selectedCodes={selectedCodes.map(s => s.code)}
-                  onSelect={handleFundSelect}
-                  loading={loadingFunds}
-                />
-              </div>
-
-              <div className="selected-funds-grid">
-                {loadingDetails && selectedCodes.length > selectedFunds.length ? (
-                  <>
-                    {selectedFunds.map((fund, index) => (
-                      <FundCard 
-                        key={fund.code} 
-                        fund={fund} 
-                        onRemove={() => handleRemoveFund(fund.code)} 
-                        color={fundColors[index % fundColors.length]} 
-                      />
-                    ))}
-                    {Array.from({ length: selectedCodes.length - selectedFunds.length }).map((_, i) => (
-                      <FundCardSkeleton key={`skeleton-${i}`} />
-                    ))}
-                  </>
-                ) : (
-                  selectedFunds.map((fund, index) => (
-                    <div 
-                      key={fund.code} 
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => { setProfileDrawerCode(fund.code); setProfileDrawerIndex(index); }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === 'Enter' && (setProfileDrawerCode(fund.code), setProfileDrawerIndex(index))}
-                    >
-                      <FundCard 
-                        fund={fund} 
-                        onRemove={() => handleRemoveFund(fund.code)} 
-                        color={fundColors[index % fundColors.length]} 
-                      />
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="card">
-                <div className="filter-row" style={{ marginBottom: '16px' }}>
-                  <span className="filter-label">Time Period:</span>
-                  <div className="chip-group">
-                    {timeFilters.map((filter) => (
-                      <button
-                        key={filter.label}
-                        className={`chip ${filter.label === activeTimeFilter.label ? 'active' : ''}`}
-                        onClick={() => setActiveTimeFilter(filter)}
-                        aria-pressed={filter.label === activeTimeFilter.label}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="filter-row" style={{ marginBottom: '16px' }}>
-                  <span className="filter-label">Metric:</span>
-                  <div className="chip-group">
-                    {metricFilters.map((filter) => (
-                      <button
-                        key={filter.label}
-                        className={`chip ${filter.label === activeMetric.label ? 'active' : ''}`}
-                        onClick={() => setActiveMetric(filter)}
-                        aria-pressed={filter.label === activeMetric.label}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="filter-row">
-                  <span className="filter-label">Chart Mode:</span>
-                  <div className="chip-group">
-                    <button
-                      className={`chip ${isNormalized ? 'active' : ''}`}
-                      onClick={() => setIsNormalized(!isNormalized)}
-                      aria-pressed={isNormalized}
-                    >
-                      Percentage Change (%)
-                    </button>
-                    <button
-                      className={`chip ${showMA ? 'active' : ''}`}
-                      onClick={() => setShowMA(!showMA)}
-                      aria-pressed={showMA}
-                    >
-                      Moving Averages (MA50/MA200)
-                    </button>
-                    <button
-                      className="chip"
-                      onClick={handleRefresh}
-                      disabled={loadingDetails || selectedCodes.length === 0}
-                      style={{ marginLeft: 'auto' }}
-                      aria-label="Refresh data"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }}>
-                        <path d="M23 4v6h-6"/>
-                        <path d="M1 20v-6h6"/>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                      </svg>
-                      {loadingDetails ? 'Yükleniyor...' : 'Yenile'}
-                    </button>
-                  </div>
+                <span className="filter-label">Chart Mode:</span>
+                <div className="chip-group">
+                  <button
+                    className={`chip ${isNormalized ? 'active' : ''}`}
+                    onClick={() => setIsNormalized(!isNormalized)}
+                  >
+                    Percentage Change (%)
+                  </button>
+                  <button
+                    className={`chip ${showMA ? 'active' : ''}`}
+                    onClick={() => setShowMA(!showMA)}
+                  >
+                    Moving Averages (MA50/MA200)
+                  </button>
+                  <button
+                    className="chip"
+                    onClick={handleRefresh}
+                    disabled={loadingDetails || selectedCodes.length === 0}
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    🔄 {loadingDetails ? 'Yükleniyor...' : 'Yenile'}
+                  </button>
                 </div>
               </div>
             </div>
+          </div>
 
-            {selectedFunds.length > 0 ? (
-              <>
-                {loadingDetails ? (
-                  <ChartSkeleton />
-                ) : (
-                  <PerformanceChart
-                    data={chartData}
-                    metricLabel={activeMetric.label}
-                    selectedCodes={selectedCodes.map(s => s.code)}
-                    isNormalized={isNormalized}
-                    showMA={showMA}
-                  />
-                )}
+          {selectedFunds.length > 0 ? (
+            <>
+              {loadingDetails ? (
+                <ChartSkeleton />
+              ) : (
+                <PerformanceChart
+                  data={chartData}
+                  metricLabel={activeMetric.label}
+                  selectedCodes={selectedCodes.map(s => s.code)}
+                  isNormalized={isNormalized}
+                  showMA={showMA}
+                />
+              )}
 
-                <div className="card" style={{ marginTop: '16px' }}>
-                  <h3 className="section-title">Risk & Performance Metrics</h3>
-                  <div className="analytics-grid">
-                    {selectedFunds.map((fund, index) => {
-                      const sharpe = fund.priceHistory ? calculateSharpeRatio(fund.priceHistory) : null;
-                      const volatility = fund.priceHistory ? calculateVolatility(fund.priceHistory) : null;
-                      const maxDD = fund.priceHistory ? calculateMaxDrawdown(fund.priceHistory) : null;
+              {/* Analytics Panel */}
+              <div className="card" style={{ marginTop: 16 }}>
+                <h3 className="section-title">Risk & Performance Metrics</h3>
+                <div className="analytics-grid">
+                  {selectedFunds.map((fund, index) => {
+                    const sharpe = fund.priceHistory ? calculateSharpeRatio(fund.priceHistory) : null;
+                    const volatility = fund.priceHistory ? calculateVolatility(fund.priceHistory) : null;
+                    const maxDD = fund.priceHistory ? calculateMaxDrawdown(fund.priceHistory) : null;
 
-                      return (
-                        <div
-                          key={fund.code}
-                          className="analytics-card"
-                          style={{ borderLeftColor: fundColors[index % fundColors.length] }}
-                        >
-                          <div className="analytics-fund-code">{fund.code}</div>
-                          <div className="analytics-metrics">
-                            <div className="analytics-metric">
-                              <span className="analytics-label">Sharpe Ratio:</span>
-                              <span className="analytics-value">{formatSharpeRatio(sharpe)}</span>
-                            </div>
-                            <div className="analytics-metric">
-                              <span className="analytics-label">Volatility:</span>
-                              <span className="analytics-value">{formatVolatility(volatility)}</span>
-                            </div>
-                            <div className="analytics-metric">
-                              <span className="analytics-label">Max Drawdown:</span>
-                              <span className="analytics-value negative">{formatMaxDrawdown(maxDD)}</span>
-                            </div>
+                    return (
+                      <div
+                        key={fund.code}
+                        className="analytics-card"
+                        style={{ borderLeftColor: fundColors[index % fundColors.length] }}
+                      >
+                        <div className="analytics-fund-code">{fund.code}</div>
+                        <div className="analytics-metrics">
+                          <div className="analytics-metric">
+                            <span className="analytics-label">Sharpe Ratio:</span>
+                            <span className="analytics-value">{formatSharpeRatio(sharpe)}</span>
+                          </div>
+                          <div className="analytics-metric">
+                            <span className="analytics-label">Volatility:</span>
+                            <span className="analytics-value">{formatVolatility(volatility)}</span>
+                          </div>
+                          <div className="analytics-metric">
+                            <span className="analytics-label">Max Drawdown:</span>
+                            <span className="analytics-value negative">{formatMaxDrawdown(maxDD)}</span>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
-            ) : (
-              <EmptyState 
-                icon="chart"
-                title="No funds selected"
-                description="Select up to 5 funds to start tracking their performance. Use the search above to find and add funds to your portfolio."
-                action={{
-                  label: 'Browse Funds',
-                  onClick: () => setActiveTab('screener')
-                }}
-              />
-            )}
-          </>
-        )}
-      </main>
+              </div>
+            </>
+          ) : (
+            <div className="card" style={{ textAlign: 'center', padding: '60px', background: 'var(--surface-muted)' }}>
+              <p style={{ color: 'var(--color-muted-soft)', fontSize: '1.1rem' }}>
+                Select up to 5 funds to start tracking their performance.
+              </p>
+            </div>
+          )}
+        </>
+      )}
 
       <FundProfileDrawer
         fundCode={profileDrawerCode}

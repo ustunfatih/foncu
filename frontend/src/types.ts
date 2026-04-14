@@ -101,11 +101,18 @@ export interface MacroSeries {
 export interface TechnicalScanResult {
   code: string;
   title: string;
-  kind: FundKind;
+  manager: string | null;
   rsi: number | null;
-  shortSma: number | null;
-  longSma: number | null;
-  smaCross: boolean;
+  rsiSignal: string | null;
+  sma20: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  price: number | null;
+  aboveMa200: boolean | null;
+  smaCrossover: boolean | null;
+  return1m: number | null;
+  return1y: number | null;
+  riskLevel: number | null;
 }
 
 export interface MarketEvent {
