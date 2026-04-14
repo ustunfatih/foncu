@@ -50,6 +50,23 @@ const BenchmarkPage = () => {
     loadComparison();
   }, [baseCode, benchmarkCode]);
 
+  if (loading) {
+    return (
+      <div className="container">
+        <div className="page-header">
+          <div>
+            <h1 className="title">Benchmark Karşılaştırması</h1>
+            <p className="subtitle">BIST ETF'leri üzerinden fon performansını karşılaştırın.</p>
+          </div>
+        </div>
+        <div className="card" style={{ textAlign: 'center', padding: '60px' }}>
+          <div className="skeleton skeleton-card" style={{ height: '200px' }} />
+          <p style={{ marginTop: '16px', color: 'var(--color-text-secondary)' }}>Yükleniyor...</p>
+        </div>
+      </div>
+    );
+  }
+
   const chartData = useMemo(() => {
     if (!baseFund || !benchmarkFund) return [];
     const map: Record<string, Record<string, number>> = {};

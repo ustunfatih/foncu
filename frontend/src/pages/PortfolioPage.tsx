@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchPortfolioValuation, fetchPortfolioExposure } from '../api';
 import { formatTry, formatTry6 } from '../utils/format';
 import { PortfolioHoldingInput, PortfolioValuation, PortfolioExposure } from '../types';
+import EmptyState from '../components/EmptyState';
 
 const STORAGE_KEY = 'portfolioHoldings';
 
@@ -80,12 +81,23 @@ const PortfolioPage = () => {
         </div>
       </div>
 
+      {error && <div className="error-banner">{error}</div>}
+
       {/* Add holding */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="grid grid-3">
-          <label>Fon Kodu<input className="input" value={code} onChange={e => setCode(e.target.value)} placeholder="AKB" /></label>
-          <label>Adet<input className="input" type="number" value={shares} onChange={e => setShares(Number(e.target.value))} /></label>
-          <label>Maliyet (TL)<input className="input" type="number" value={cost} onChange={e => setCost(Number(e.target.value))} /></label>
+          <label>
+            Fon Kodu
+            <input className="input" value={code} onChange={e => setCode(e.target.value)} placeholder="AKB" />
+          </label>
+          <label>
+            Adet
+            <input className="input" type="number" value={shares} onChange={e => setShares(Number(e.target.value))} />
+          </label>
+          <label>
+            Maliyet (TL)
+            <input className="input" type="number" value={cost} onChange={e => setCost(Number(e.target.value))} />
+          </label>
         </div>
         <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
           <button className="github-login-btn" onClick={addHolding}>Ekle</button>
@@ -95,26 +107,32 @@ const PortfolioPage = () => {
         </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
-
       {/* Holdings list */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="section-title">Eklenen Fonlar</div>
-        <div className="table-wrapper">
-          <table className="table">
-            <thead><tr><th>Kod</th><th>Adet</th><th>Maliyet</th><th></th></tr></thead>
-            <tbody>
-              {holdings.map((holding, index) => (
-                <tr key={`${holding.code}-${index}`}>
-                  <td>{holding.code}</td>
-                  <td>{holding.shares}</td>
-                  <td>{holding.cost}</td>
-                  <td><button className="chip" onClick={() => removeHolding(index)}>Sil</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {holdings.length === 0 ? (
+          <EmptyState 
+            icon="folder"
+            title="Fon eklenmedi"
+            description="Yukarıdaki formu kullanarak portföyünüze fon ekleyin."
+          />
+        ) : (
+          <div className="table-wrapper">
+            <table className="table">
+              <thead><tr><th>Kod</th><th>Adet</th><th>Maliyet</th><th></th></tr></thead>
+              <tbody>
+                {holdings.map((holding, index) => (
+                  <tr key={`${holding.code}-${index}`}>
+                    <td style={{ fontWeight: 700 }}>{holding.code}</td>
+                    <td>{holding.shares}</td>
+                    <td>{holding.cost}</td>
+                    <td><button className="chip" onClick={() => removeHolding(index)}>Sil</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Valuation results */}
@@ -124,7 +142,7 @@ const PortfolioPage = () => {
             <div className="section-title" style={{ margin: 0 }}>Portföy Özeti</div>
             <button
               className="github-login-btn"
-              style={{ background: '#5b21b6', color: '#fff', fontSize: 12 }}
+              style={{ background: 'var(--color-chart-5)', color: 'var(--color-text-inverse)', fontSize: 12 }}
               onClick={loadExposure}
               disabled={exposureLoading}
             >
@@ -137,13 +155,13 @@ const PortfolioPage = () => {
               <div className="metric-label">Toplam Değer</div>
             </div>
             <div>
-              <div className="metric-value" style={{ color: valuation.pnl >= 0 ? '#2e7d32' : '#c62828' }}>
+              <div className="metric-value" style={{ color: valuation.pnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
                 {formatTry(valuation.pnl)}
               </div>
               <div className="metric-label">Kar/Zarar</div>
             </div>
             <div>
-              <div className="metric-value" style={{ color: (valuation.pnlPct ?? 0) >= 0 ? '#2e7d32' : '#c62828' }}>
+              <div className="metric-value" style={{ color: (valuation.pnlPct ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
                 {valuation.pnlPct ? `${(valuation.pnlPct * 100).toFixed(1)}%` : 'N/A'}
               </div>
               <div className="metric-label">Getiri</div>
@@ -159,7 +177,7 @@ const PortfolioPage = () => {
                     <td>{formatTry6(h.latestPrice)}</td>
                     <td>{formatTry(h.value)}</td>
                     <td>{(h.weight * 100).toFixed(1)}%</td>
-                    <td style={{ color: h.pnl >= 0 ? '#2e7d32' : '#c62828', fontWeight: 600 }}>{formatTry(h.pnl)}</td>
+                    <td style={{ color: h.pnl >= 0 ? 'var(--color-success)' : 'var(--color-danger)', fontWeight: 600 }}>{formatTry(h.pnl)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -175,14 +193,14 @@ const PortfolioPage = () => {
             <div className="section-title" style={{ margin: 0 }}>
               Efektif Hisse Maruziyeti
               {exposure.rapor.yil && (
-                <span style={{ fontSize: 10, color: '#aaa', marginLeft: 8, fontWeight: 400 }}>
+                <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)', marginLeft: 8, fontWeight: 400 }}>
                   Rapor: {exposure.rapor.ay}/{exposure.rapor.yil}
                 </span>
               )}
             </div>
-            <button onClick={() => setShowExposure(false)} style={{ fontSize: 11, color: '#aaa', background: 'none', border: 'none', cursor: 'pointer' }}>Gizle</button>
+            <button onClick={() => setShowExposure(false)} style={{ fontSize: 11, color: 'var(--color-text-tertiary)', background: 'none', border: 'none', cursor: 'pointer' }}>Gizle</button>
           </div>
-          <p style={{ fontSize: 11, color: '#888', marginBottom: 12 }}>
+          <p style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
             Portföyünüzdeki fonların altındaki hisselere toplam maruziyetiniz, her fonun portföy ağırlığıyla ağırlıklandırılmıştır.
           </p>
           <div className="table-wrapper">
@@ -197,11 +215,11 @@ const PortfolioPage = () => {
               </thead>
               <tbody>
                 {exposure.exposure.map((item, i) => (
-                  <tr key={item.ticker} style={{ background: i % 2 === 1 ? '#fafaf8' : undefined }}>
+                  <tr key={item.ticker} style={{ background: i % 2 === 1 ? 'var(--color-bg-secondary)' : undefined }}>
                     <td style={{ fontWeight: 700 }}>{item.ticker}</td>
-                    <td style={{ fontWeight: 600, color: '#2e7d32' }}>{fmtPct(item.effectiveWeight)}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--color-success)' }}>{fmtPct(item.effectiveWeight)}</td>
                     <td>{formatTry(item.effectiveTRY)}</td>
-                    <td style={{ fontSize: 10, color: '#666' }}>
+                    <td style={{ fontSize: 10, color: 'var(--color-text-secondary)' }}>
                       {Object.entries(item.byFund).map(([fund, d]) => (
                         <span key={fund} style={{ marginRight: 8, whiteSpace: 'nowrap' }}>
                           <strong>{fund}</strong>: {d.fundWeight?.toFixed(1)}% → {d.contribution.toFixed(2)}%

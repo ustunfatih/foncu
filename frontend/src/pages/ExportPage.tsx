@@ -424,7 +424,7 @@ const ExportPage = ({ fundKind: initialFundKind }: ExportPageProps) => {
                         Tüm Fonlar (Kullanılamayan Dahil)
                     </button>
                 </div>
-                <p style={{ fontSize: '0.85rem', color: '#64748b', marginTop: 8 }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-secondary)', marginTop: 8 }}>
                     {showOnlyAvailable
                         ? `✅ Yalnızca TEFAS üzerinden veri alınabilen fonlar gösteriliyor`
                         : `⚠️ Bazı fonlar TEFAS'ta mevcut değil ve veri alınamayabilir`
@@ -455,7 +455,7 @@ const ExportPage = ({ fundKind: initialFundKind }: ExportPageProps) => {
                         <span style={{ marginLeft: 8, fontWeight: 600 }}>Tümünü Seç ({filteredFunds.length} fon)</span>
                     </label>
                     {searchQuery && (
-                        <span style={{ fontSize: 12, color: '#6b7280' }}>
+                        <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
                             Arama sonucu: {filteredFunds.length} fon
                         </span>
                     )}

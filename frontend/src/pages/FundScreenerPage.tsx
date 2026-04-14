@@ -18,10 +18,10 @@ const RSI_SINYAL_LABELS: Record<string, string> = {
 };
 
 const RSI_SINYAL_COLORS: Record<string, { bg: string; color: string }> = {
-  guclu_al: { bg: '#bbf7d0', color: '#14532d' },
-  al: { bg: '#dcfce7', color: '#166534' },
-  dikkat: { bg: '#fef9c3', color: '#854d0e' },
-  normal: { bg: '#f3f4f6', color: '#374151' },
+  guclu_al: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  al: { bg: 'var(--color-success-muted)', color: 'var(--color-success)' },
+  dikkat: { bg: 'var(--color-warning-muted)', color: 'var(--color-warning)' },
+  normal: { bg: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)' },
 };
 
 const fmtPct = (n: number | null) =>
@@ -31,13 +31,13 @@ const fmtNum = (n: number | null) =>
   n == null ? '—' : n.toFixed(2);
 
 const pctColor = (n: number | null) =>
-  n == null ? undefined : n >= 0 ? '#2e7d32' : '#c62828';
+  n == null ? undefined : n >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
 
 const BoolIcon = ({ val }: { val: boolean | null }) => {
-  if (val == null) return <span style={{ color: '#ccc' }}>—</span>;
+  if (val == null) return <span style={{ color: 'var(--color-text-tertiary)' }}>—</span>;
   return val
-    ? <span style={{ color: '#2e7d32', fontWeight: 700 }}>✓</span>
-    : <span style={{ color: '#c62828' }}>✗</span>;
+    ? <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>✓</span>
+    : <span style={{ color: 'var(--color-danger)' }}>✗</span>;
 };
 
 const FundScreenerPage = () => {
@@ -135,11 +135,12 @@ const FundScreenerPage = () => {
   const inputStyle: React.CSSProperties = {
     width: '100%',
     padding: '6px 8px',
-    border: '1px solid #e0e0e0',
-    borderRadius: 6,
+    border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)',
     fontSize: 12,
-    background: '#fff',
+    background: 'var(--color-bg-card)',
     boxSizing: 'border-box',
+    color: 'var(--color-text-primary)',
   };
 
   const labelStyle: React.CSSProperties = {
@@ -147,7 +148,7 @@ const FundScreenerPage = () => {
     flexDirection: 'column',
     gap: 4,
     fontSize: 11,
-    color: '#555',
+    color: 'var(--color-text-secondary)',
     fontWeight: 600,
   };
 
@@ -161,14 +162,14 @@ const FundScreenerPage = () => {
       </div>
 
       {/* Mode toggle */}
-      <div style={{ display: 'flex', background: '#f0f0ee', borderRadius: 10, padding: 4, gap: 4, width: 'fit-content', marginBottom: 16 }}>
+      <div style={{ display: 'flex', background: 'var(--color-bg-secondary)', borderRadius: 10, padding: 4, gap: 4, width: 'fit-content', marginBottom: 16 }}>
         {(['getiri', 'hisse'] as ScreenerMode[]).map(m => (
           <button key={m} onClick={() => setMode(m)} style={{
             padding: '6px 18px', borderRadius: 7, fontSize: 12, fontWeight: mode === m ? 700 : 500,
             border: 'none', cursor: 'pointer',
-            background: mode === m ? '#fff' : 'transparent',
-            color: mode === m ? '#111' : '#888',
-            boxShadow: mode === m ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+            background: mode === m ? 'var(--color-bg-card)' : 'transparent',
+            color: mode === m ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+            boxShadow: mode === m ? 'var(--shadow-sm)' : 'none',
           }}>
             {m === 'getiri' ? 'Getiri Filtresi' : 'Hisse Filtresi ✦'}
           </button>
@@ -273,7 +274,7 @@ const FundScreenerPage = () => {
               </button>
               <button onClick={resetFilters} disabled={loading} style={{
                 padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-                border: '1px solid #ddd', cursor: 'pointer', background: '#f9f9f7', color: '#555',
+                border: '1px solid var(--color-border)', cursor: 'pointer', background: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)',
               }}>
                 Sıfırla
               </button>
@@ -291,7 +292,7 @@ const FundScreenerPage = () => {
                 <table className="table" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
                   <thead>
                     <tr>
-                      <th style={{ position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>Kod</th>
+                      <th style={{ position: 'sticky', left: 0, background: 'var(--color-bg-card)', zIndex: 1 }}>Kod</th>
                       <th style={{ minWidth: 160 }}>Fon</th>
                       <th>PYŞ</th>
                       <th>Tür</th>
@@ -318,19 +319,19 @@ const FundScreenerPage = () => {
                     {results.map((f, i) => {
                       const rsiStyle = f.rsi_sinyal ? RSI_SINYAL_COLORS[f.rsi_sinyal] : null;
                       return (
-                        <tr key={f.fon_kodu} style={{ background: i % 2 === 1 ? '#fafaf8' : undefined }}>
-                          <td style={{ fontWeight: 700, position: 'sticky', left: 0, background: i % 2 === 1 ? '#fafaf8' : '#fff' }}>
+                        <tr key={f.fon_kodu} style={{ background: i % 2 === 1 ? 'var(--color-bg-secondary)' : undefined }}>
+                          <td style={{ fontWeight: 700, position: 'sticky', left: 0, background: i % 2 === 1 ? 'var(--color-bg-secondary)' : 'var(--color-bg-card)', zIndex: 1 }}>
                             {f.fon_kodu}
                           </td>
                           <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {f.unvan}
                           </td>
-                          <td style={{ color: '#888', fontSize: 10 }}>{f.portfoy_yonetim_sirketi ?? '—'}</td>
+                          <td style={{ color: 'var(--color-text-tertiary)', fontSize: 10 }}>{f.portfoy_yonetim_sirketi ?? '—'}</td>
                           <td>{FON_TIPI_LABELS[f.fon_tipi] ?? f.fon_tipi}</td>
                           <td style={{ fontSize: 10 }}>{f.fon_kategorisi ?? '—'}</td>
                           <td>
                             {f.risk_seviyesi != null && (
-                              <span style={{ padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>
+                              <span style={{ padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: 'var(--color-warning-muted)', color: 'var(--color-warning)' }}>
                                 {f.risk_seviyesi}/7
                               </span>
                             )}
@@ -361,7 +362,7 @@ const FundScreenerPage = () => {
                     })}
                     {results.length === 0 && (
                       <tr>
-                        <td colSpan={21} style={{ textAlign: 'center', color: '#aaa', padding: 24 }}>
+                        <td colSpan={21} style={{ textAlign: 'center', color: 'var(--color-text-tertiary)', padding: 24 }}>
                           Sonuç bulunamadı.
                         </td>
                       </tr>
@@ -398,7 +399,7 @@ const FundScreenerPage = () => {
                 </select>
               </label>
             </div>
-            <button className="github-login-btn" style={{ marginTop: 12, background: '#5b21b6', color: '#fff' }}
+            <button className="github-login-btn" style={{ marginTop: 12, background: 'var(--color-chart-5)', color: 'var(--color-text-inverse)' }}
               onClick={searchHoldings} disabled={holdingsLoading || !tickerInput.trim()}>
               {holdingsLoading ? 'Aranıyor...' : 'Ara'}
             </button>
@@ -410,13 +411,13 @@ const FundScreenerPage = () => {
             <div className="card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div className="section-title" style={{ margin: 0 }}>
-                  <span style={{ padding: '2px 10px', borderRadius: 999, background: '#ede9fe', color: '#5b21b6', fontWeight: 800, marginRight: 8 }}>
+                  <span style={{ padding: '2px 10px', borderRadius: 999, background: 'var(--color-chart-5)', color: 'var(--color-text-inverse)', fontWeight: 800, marginRight: 8 }}>
                     {holdingsResult.ticker}
                   </span>
                   tutan fonlar ({holdingsResult.fonlar.length})
                 </div>
                 {holdingsResult.rapor && (
-                  <span style={{ fontSize: 10, color: '#aaa' }}>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>
                     Rapor: {holdingsResult.rapor.ay}/{holdingsResult.rapor.yil}
                   </span>
                 )}
@@ -428,17 +429,17 @@ const FundScreenerPage = () => {
                   </thead>
                   <tbody>
                     {holdingsResult.fonlar.map((f, i) => (
-                      <tr key={f.fon_kodu} style={{ background: i % 2 === 1 ? '#fafaf8' : undefined }}>
-                        <td style={{ fontWeight: 700, color: '#5b21b6' }}>{f.fon_kodu}</td>
+                      <tr key={f.fon_kodu} style={{ background: i % 2 === 1 ? 'var(--color-bg-secondary)' : undefined }}>
+                        <td style={{ fontWeight: 700, color: 'var(--color-chart-5)' }}>{f.fon_kodu}</td>
                         <td style={{ fontSize: 11 }}>{f.unvan}</td>
-                        <td style={{ fontSize: 10, color: '#888' }}>{f.portfoy_yonetim_sirketi ?? '—'}</td>
-                        <td style={{ fontWeight: 700, color: '#2e7d32' }}>{f.agirlik.toFixed(1)}%</td>
-                        <td style={{ fontWeight: 600, color: (f.getiri_1y ?? 0) >= 0 ? '#2e7d32' : '#c62828' }}>
+                        <td style={{ fontSize: 10, color: 'var(--color-text-tertiary)' }}>{f.portfoy_yonetim_sirketi ?? '—'}</td>
+                        <td style={{ fontWeight: 700, color: 'var(--color-success)' }}>{f.agirlik.toFixed(1)}%</td>
+                        <td style={{ fontWeight: 600, color: (f.getiri_1y ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
                           {f.getiri_1y == null ? '—' : `${f.getiri_1y >= 0 ? '+' : ''}${f.getiri_1y.toFixed(1)}%`}
                         </td>
                         <td>
                           {f.risk_seviyesi != null && (
-                            <span style={{ padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>
+                            <span style={{ padding: '2px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: 'var(--color-warning-muted)', color: 'var(--color-warning)' }}>
                               {f.risk_seviyesi}/7
                             </span>
                           )}
