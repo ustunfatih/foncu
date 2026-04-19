@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, Area, ComposedChart } from 'recharts';
 import { formatTry6 } from '../utils/format';
 
@@ -70,7 +71,7 @@ const CustomTooltip = ({ active, payload, label, isNormalized }: any) => {
   );
 };
 
-const PerformanceChart = ({ data, metricLabel, selectedCodes, isNormalized, showMA }: Props) => {
+const PerformanceChart = memo(({ data, metricLabel, selectedCodes, isNormalized, showMA }: Props) => {
   const formatYAxis = (value: number) => {
     if (isNormalized) return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -183,6 +184,6 @@ const PerformanceChart = ({ data, metricLabel, selectedCodes, isNormalized, show
       </div>
     </div>
   );
-};
+});
 
 export default PerformanceChart;
