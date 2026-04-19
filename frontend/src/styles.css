@@ -366,6 +366,73 @@ body {
   color: var(--text-primary);
   padding: 3px 8px;
   border-radius: 5px;
+  transition: background-color 0.2s;
+}
+
+.fund-code-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  position: relative;
+  border-radius: 6px;
+  padding: 2px;
+  margin: -2px;
+}
+
+.fund-code-wrapper:hover .fund-card-code {
+  background: var(--surface-soft);
+}
+
+.fund-code-wrapper:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  color: var(--color-muted-soft);
+  cursor: pointer;
+  border-radius: 4px;
+  opacity: 0.3;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.copy-btn:hover {
+  background: var(--surface-soft);
+  color: var(--primary);
+}
+
+.copy-btn.copied {
+  color: var(--success-text);
+  opacity: 1;
+}
+
+.copy-badge {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--text-primary);
+  color: var(--bg-page);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  white-space: nowrap;
+  z-index: 20;
+}
+
+.copy-badge.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .fund-card-sharpe {

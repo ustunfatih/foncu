@@ -80,12 +80,12 @@ const FundSelector = memo(({ funds, selectedCodes, onSelect, loading }: Props) =
 
   return (
     <div className="card">
-      <h2 className="section-title">Search & Select Funds</h2>
+      <h2 className="section-title">Fon Ara ve Seç</h2>
       <div className="selector-dropdown">
         <input
           ref={inputRef}
           className="input"
-          placeholder={loading ? 'Loading funds...' : 'Search by fund code or name...'}
+          placeholder={loading ? 'Fonlar yükleniyor...' : 'Fon kodu veya adı ile ara...'}
           value={query}
           disabled={loading}
           onFocus={() => setIsOpen(true)}
@@ -97,7 +97,7 @@ const FundSelector = memo(({ funds, selectedCodes, onSelect, loading }: Props) =
           aria-expanded={isOpen}
           aria-controls="fund-listbox"
           aria-activedescendant={activeIndex >= 0 ? `fund-option-${matches[activeIndex]?.code}` : undefined}
-          aria-label="Search funds"
+          aria-label="Fon ara"
         />
         {isOpen && !loading && (
           <ul
@@ -136,12 +136,12 @@ const FundSelector = memo(({ funds, selectedCodes, onSelect, loading }: Props) =
                     <span className="checklist-code">{fund.code}</span>
                     <span className="checklist-title">{fund.title}</span>
                   </div>
-                  <span className="sr-only">{isSelected ? 'Selected' : 'Not selected'}</span>
+                  <span className="sr-only">{isSelected ? 'Seçildi' : 'Seçilmedi'}</span>
                 </li>
               );
             })}
             {!matches.length && (
-              <li className="no-matches" role="status">No matches found</li>
+              <li className="no-matches" role="status">Eşleşen fon bulunamadı</li>
             )}
           </ul>
         )}
@@ -151,7 +151,7 @@ const FundSelector = memo(({ funds, selectedCodes, onSelect, loading }: Props) =
             className="alert-message"
           >
             <span aria-hidden="true">⚠️</span>
-            Maximum of 5 funds can be selected.
+            En fazla 5 fon seçebilirsiniz.
           </div>
         )}
       </div>

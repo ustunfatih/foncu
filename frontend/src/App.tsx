@@ -27,11 +27,11 @@ import {
 } from './utils/analytics';
 
 const timeFilters = [
-  { label: '1D', days: 1 },
-  { label: '1W', days: 7 },
-  { label: '1M', days: 30 },
-  { label: '3M', days: 90 },
-  { label: '6M', days: 180 },
+  { label: '1G', days: 1 },
+  { label: '1H', days: 7 },
+  { label: '1A', days: 30 },
+  { label: '3A', days: 90 },
+  { label: '6A', days: 180 },
   { label: 'YBB', days: 'ybb' },
   { label: '1Y', days: 365 },
   { label: '3Y', days: 365 * 3 },
@@ -39,9 +39,9 @@ const timeFilters = [
 ];
 
 const metricFilters = [
-  { label: 'Price', key: 'priceHistory' },
-  { label: 'Investors', key: 'investorHistory' },
-  { label: 'Market Cap', key: 'marketCapHistory' },
+  { label: 'Fiyat', key: 'priceHistory' },
+  { label: 'Yatırımcı Sayısı', key: 'investorHistory' },
+  { label: 'Fon Toplam Değeri', key: 'marketCapHistory' },
 ];
 
 const fundKinds: { label: string; value: FundKind }[] = [
@@ -379,8 +379,8 @@ const App = () => {
     <div className="container">
       <header className="page-header">
         <div>
-          <p className="title">TEFAS Fund Dashboard</p>
-          <p className="subtitle">Interactive performance tracking for multiple investment funds</p>
+          <p className="title">TEFAS Fon Takip Masası</p>
+          <p className="subtitle">Yatırım fonları için etkileşimli performans takip ve analiz platformu</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {user ? (
@@ -505,13 +505,13 @@ const App = () => {
         <>
           {error && (
             <div className="card" style={{ background: 'var(--error-surface)', borderColor: 'var(--error-border)', marginBottom: 16 }}>
-              <p style={{ color: 'var(--error-text)', margin: 0 }}>Error: {error}</p>
+              <p style={{ color: 'var(--error-text)', margin: 0 }}>Hata: {error}</p>
             </div>
           )}
 
           <div className="filter-group">
             <div className="filter-row" style={{ marginBottom: 16 }}>
-              <span className="filter-label">Fund Type:</span>
+              <span className="filter-label">Fon Türü:</span>
               <div className="chip-group">
                 {fundKinds.map((kind) => (
                   <button
@@ -528,7 +528,7 @@ const App = () => {
                   disabled={pendingFundKind === fundKind || loadingFunds}
                   style={{ marginLeft: 8, opacity: pendingFundKind === fundKind ? 0.45 : 1 }}
                 >
-                  {loadingFunds ? 'Yükleniyor...' : 'Fonları Yükle'}
+                  {loadingFunds ? 'Yükleniyor...' : 'Fonları Getir'}
                 </button>
                 <button
                   className="chip badge-danger"
@@ -590,7 +590,7 @@ const App = () => {
 
             <div className="card">
               <div className="filter-row" style={{ marginBottom: 16 }}>
-                <span className="filter-label">Time Period:</span>
+                <span className="filter-label">Zaman Aralığı:</span>
                 <div className="chip-group">
                   {timeFilters.map((filter) => (
                     <button
@@ -605,7 +605,7 @@ const App = () => {
               </div>
 
               <div className="filter-row" style={{ marginBottom: 16 }}>
-                <span className="filter-label">Metric:</span>
+                <span className="filter-label">Metrik:</span>
                 <div className="chip-group">
                   {metricFilters.map((filter) => (
                     <button
@@ -620,19 +620,19 @@ const App = () => {
               </div>
 
               <div className="filter-row">
-                <span className="filter-label">Chart Mode:</span>
+                <span className="filter-label">Grafik Modu:</span>
                 <div className="chip-group">
                   <button
                     className={`chip ${isNormalized ? 'active' : ''}`}
                     onClick={() => setIsNormalized(!isNormalized)}
                   >
-                    Percentage Change (%)
+                    Yüzdesel Değişim (%)
                   </button>
                   <button
                     className={`chip ${showMA ? 'active' : ''}`}
                     onClick={() => setShowMA(!showMA)}
                   >
-                    Moving Averages (MA50/MA200)
+                    Hareketli Ortalamalar (HO50/HO200)
                   </button>
                   <button
                     className="chip"
@@ -663,7 +663,7 @@ const App = () => {
 
               {/* Analytics Panel */}
               <div className="card" style={{ marginTop: 16 }}>
-                <h3 className="section-title">Risk & Performance Metrics</h3>
+                <h3 className="section-title">Risk ve Performans Metrikleri</h3>
                 <div className="analytics-grid">
                   {fundAnalytics.map((analytics, index) => {
                     return (
