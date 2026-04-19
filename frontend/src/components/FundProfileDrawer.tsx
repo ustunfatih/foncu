@@ -24,6 +24,15 @@ export function FundProfileDrawer({ fundCode, fundIndex, onClose, onAddToOverlap
   const [profile, setProfile] = useState<FundProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCode = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!fundCode) return;
+    navigator.clipboard.writeText(fundCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (!fundCode) { setProfile(null); return; }
@@ -65,17 +74,45 @@ export function FundProfileDrawer({ fundCode, fundIndex, onClose, onAddToOverlap
         <div style={{ padding: '16px 16px 12px', background: '#f5f4f0', borderBottom: '1px solid #e8e6e1' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 24, fontWeight: 900, color: color.text, letterSpacing: '-0.5px' }}>
-                {fundCode}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 24, fontWeight: 900, color: color.text, letterSpacing: '-0.5px' }}>
+                  {fundCode}
+                </div>
+                <button
+                  onClick={handleCopyCode}
+                  title="Kodu Kopyala"
+                  aria-label="Fon kodunu kopyala"
+                  style={{
+                    background: 'none', border: 'none', padding: '4px', cursor: 'pointer',
+                    color: copied ? '#059669' : '#9ca3af', display: 'flex', transition: 'color 0.2s'
+                  }}
+                >
+                  {copied ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                  )}
+                </button>
               </div>
               <div style={{ fontSize: 11, color: '#888', marginTop: 2, lineHeight: 1.4, maxWidth: 260 }}>
                 {loading ? 'Yükleniyor...' : (profile?.unvan ?? '')}
               </div>
             </div>
-            <button onClick={onClose} style={{
-              border: '1px solid #ddd', borderRadius: 6, padding: '4px 8px',
-              fontSize: 12, color: '#888', background: '#fff', cursor: 'pointer'
-            }}>✕</button>
+            <button
+              onClick={onClose}
+              aria-label="Kapat"
+              style={{
+                border: '1px solid #ddd', borderRadius: 6, padding: '4px 8px',
+                fontSize: 12, color: '#888', background: '#fff', cursor: 'pointer'
+              }}
+            >
+              <span aria-hidden="true">✕</span>
+            </button>
           </div>
           {profile && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

@@ -33,12 +33,13 @@ const FundCard = ({ fund, onRemove, color }: Props) => {
         </div>
         <button
           className="remove-btn"
+          aria-label={`${fund.code} fonunu kaldır`}
           onClick={(event) => {
             event.stopPropagation();
             onRemove(fund.code);
           }}
         >
-          ×
+          <span aria-hidden="true">×</span>
         </button>
       </div>
 

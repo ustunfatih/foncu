@@ -11,7 +11,19 @@ interface Props {
 
 const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
   const { matches, query, setQuery } = useFundSearch({ funds });
+  const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
+
+  // Expose focus method via custom event or similar if needed,
+  // but for now we'll use a more direct approach in App.tsx if possible,
+  // or just handle the auto-focus logic here if we pass a trigger.
+  useEffect(() => {
+    const handleFocusSearch = () => {
+      inputRef.current?.focus();
+    };
+    window.addEventListener('focus-fund-search', handleFocusSearch);
+    return () => window.removeEventListener('focus-fund-search', handleFocusSearch);
+  }, []);
   const [activeIndex, setActiveIndex] = useState(-1);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -71,6 +83,7 @@ const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
       <h2 className="section-title">Search & Select Funds</h2>
       <div className="selector-dropdown">
         <input
+          ref={inputRef}
           className="input"
           placeholder={loading ? 'Loading funds...' : 'Search by fund code or name...'}
           value={query}
