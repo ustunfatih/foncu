@@ -21,9 +21,9 @@ test('Verify clear-cache.html prevents XSS on storage output', async ({ page }) 
   // Verify that the payload is safely rendered as text
   const outputText = await page.locator('#output pre').textContent();
 
-  // Use JSON escaping semantics (quotes, backslashes, control chars) for reliable matching
-  const expectedPayloadInJson = JSON.stringify(maliciousPayload).slice(1, -1);
-  expect(outputText).toContain(expectedPayloadInJson);
+  // Parse the output to verify the unescaped payload
+  const parsedOutput = JSON.parse(outputText || '{}');
+  expect(parsedOutput.localStorage?.maliciousKey).toBe(maliciousPayload);
 
   // Cleanup
   await page.evaluate(() => {
