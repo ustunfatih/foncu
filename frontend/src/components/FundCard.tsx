@@ -1,26 +1,17 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { FundOverview } from '../types';
-import { calculateSharpeRatio, formatSharpeRatio } from '../utils/analytics';
+import { formatSharpeRatio } from '../utils/analytics';
 import { formatTry6 } from '../utils/format';
 
 interface Props {
   fund: FundOverview;
+  sharpeRatio?: number | null;
   onRemove: (code: string) => void;
   color?: string;
 }
 
-const FundCard = ({ fund, onRemove, color }: Props) => {
+const FundCard = memo(({ fund, sharpeRatio = null, onRemove, color }: Props) => {
   const [copied, setCopied] = useState(false);
-
-  // Get latest price from priceHistory
-  const latestPrice = fund.priceHistory && fund.priceHistory.length > 0
-    ? fund.priceHistory[fund.priceHistory.length - 1].value
-    : null;
-
-  // Calculate Sharpe ratio
-  const sharpeRatio = fund.priceHistory && fund.priceHistory.length > 0
-    ? calculateSharpeRatio(fund.priceHistory)
-    : null;
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -28,6 +19,11 @@ const FundCard = ({ fund, onRemove, color }: Props) => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Get latest price from priceHistory
+  const latestPrice = fund.priceHistory && fund.priceHistory.length > 0
+    ? fund.priceHistory[fund.priceHistory.length - 1].value
+    : null;
 
   return (
     <div className="card fund-card" style={color ? { borderLeftColor: color } : undefined}>
@@ -79,6 +75,6 @@ const FundCard = ({ fund, onRemove, color }: Props) => {
       <div className="fund-card-title">{fund.title}</div>
     </div>
   );
-};
+});
 
 export default FundCard;

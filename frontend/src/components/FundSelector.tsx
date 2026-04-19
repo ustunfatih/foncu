@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { FundSummary } from '../types';
 import { useFundSearch } from '../hooks/useFundSearch';
 
@@ -9,7 +9,7 @@ interface Props {
   loading?: boolean;
 }
 
-const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
+const FundSelector = memo(({ funds, selectedCodes, onSelect, loading }: Props) => {
   const { matches, query, setQuery } = useFundSearch({ funds });
   const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -157,6 +157,6 @@ const FundSelector = ({ funds, selectedCodes, onSelect, loading }: Props) => {
       </div>
     </div>
   );
-};
+});
 
 export default FundSelector;
