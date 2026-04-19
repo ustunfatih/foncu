@@ -113,7 +113,8 @@
                 }, 1000);
 
             } catch (error) {
-                status.innerHTML = '<div class="info" style="background: #fee2e2; border-color: #fecaca; color: #991b1b;">❌ Hata: ' + error.message + '</div>';
+                status.innerHTML = '<div class="info" style="background: #fee2e2; border-color: #fecaca; color: #991b1b;">❌ Hata: <span></span></div>';
+                status.querySelector('span').textContent = error.message;
             }
         }
 
@@ -138,7 +139,8 @@
                 data.sessionStorage[key] = sessionStorage.getItem(key);
             }
 
-            output.innerHTML = '<h3>Current Storage Contents:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            output.innerHTML = '<h3>Current Storage Contents:</h3><pre></pre>';
+            output.querySelector('pre').textContent = JSON.stringify(data, null, 2);
         }
 
         // Auto-detect stale Supabase data
