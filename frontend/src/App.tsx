@@ -285,6 +285,18 @@ const App = () => {
     return Math.floor(diff / (1000 * 60 * 60 * 24));
   };
 
+  const fundAnalytics = useMemo(() => {
+    return selectedFunds.map((fund) => {
+      const history = fund.priceHistory || [];
+      return {
+        code: fund.code,
+        sharpe: calculateSharpeRatio(history),
+        volatility: calculateVolatility(history),
+        maxDD: calculateMaxDrawdown(history),
+      };
+    });
+  }, [selectedFunds]);
+
   const chartData = useMemo(() => {
     if (selectedFunds.length === 0) return [];
 
@@ -542,20 +554,37 @@ const App = () => {
             <div className="selected-funds-grid">
               {loadingDetails && selectedCodes.length > selectedFunds.length ? (
                 <>
-                  {selectedFunds.map((fund, index) => (
-                    <FundCard key={fund.code} fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
-                  ))}
+                  {selectedFunds.map((fund, index) => {
+                    const analytics = fundAnalytics.find(a => a.code === fund.code);
+                    return (
+                      <FundCard
+                        key={fund.code}
+                        fund={fund}
+                        sharpeRatio={analytics?.sharpe ?? undefined}
+                        onRemove={() => handleRemoveFund(fund.code)}
+                        color={fundColors[index % fundColors.length]}
+                      />
+                    );
+                  })}
                   {Array.from({ length: selectedCodes.length - selectedFunds.length }).map((_, i) => (
                     <FundCardSkeleton key={`skeleton-${i}`} />
                   ))}
                 </>
               ) : (
-                selectedFunds.map((fund, index) => (
-                  <div key={fund.code} style={{ cursor: 'pointer' }}
-                    onClick={() => { setProfileDrawerCode(fund.code); setProfileDrawerIndex(index); }}>
-                    <FundCard fund={fund} onRemove={() => handleRemoveFund(fund.code)} color={fundColors[index % fundColors.length]} />
-                  </div>
-                ))
+                selectedFunds.map((fund, index) => {
+                  const analytics = fundAnalytics.find(a => a.code === fund.code);
+                  return (
+                    <div key={fund.code} style={{ cursor: 'pointer' }}
+                      onClick={() => { setProfileDrawerCode(fund.code); setProfileDrawerIndex(index); }}>
+                      <FundCard
+                        fund={fund}
+                        sharpeRatio={analytics?.sharpe ?? undefined}
+                        onRemove={() => handleRemoveFund(fund.code)}
+                        color={fundColors[index % fundColors.length]}
+                      />
+                    </div>
+                  );
+                })
               )}
             </div>
 
@@ -636,30 +665,26 @@ const App = () => {
               <div className="card" style={{ marginTop: 16 }}>
                 <h3 className="section-title">Risk ve Performans Metrikleri</h3>
                 <div className="analytics-grid">
-                  {selectedFunds.map((fund, index) => {
-                    const sharpe = fund.priceHistory ? calculateSharpeRatio(fund.priceHistory) : null;
-                    const volatility = fund.priceHistory ? calculateVolatility(fund.priceHistory) : null;
-                    const maxDD = fund.priceHistory ? calculateMaxDrawdown(fund.priceHistory) : null;
-
+                  {fundAnalytics.map((analytics, index) => {
                     return (
                       <div
-                        key={fund.code}
+                        key={analytics.code}
                         className="analytics-card"
                         style={{ borderLeftColor: fundColors[index % fundColors.length] }}
                       >
-                        <div className="analytics-fund-code">{fund.code}</div>
+                        <div className="analytics-fund-code">{analytics.code}</div>
                         <div className="analytics-metrics">
                           <div className="analytics-metric" title="Sharpe Oranı: Fonun birim risk başına getirisini ölçer. Yüksek değer daha iyidir.">
                             <span className="analytics-label">Sharpe Oranı:</span>
-                            <span className="analytics-value">{formatSharpeRatio(sharpe)}</span>
+                            <span className="analytics-value">{formatSharpeRatio(analytics.sharpe)}</span>
                           </div>
                           <div className="analytics-metric" title="Standart Sapma: Fonun fiyat oynaklığını ölçer. Düşük değer daha az risk demektir.">
                             <span className="analytics-label">Standart Sapma:</span>
-                            <span className="analytics-value">{formatVolatility(volatility)}</span>
+                            <span className="analytics-value">{formatVolatility(analytics.volatility)}</span>
                           </div>
                           <div className="analytics-metric" title="Maksimum Kayıp: Belirli bir dönemde fonun gördüğü en büyük düşüşü ifade eder.">
                             <span className="analytics-label">Maksimum Kayıp:</span>
-                            <span className="analytics-value negative">{formatMaxDrawdown(maxDD)}</span>
+                            <span className="analytics-value negative">{formatMaxDrawdown(analytics.maxDD)}</span>
                           </div>
                         </div>
                       </div>
