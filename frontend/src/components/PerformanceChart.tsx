@@ -15,25 +15,39 @@ const maColors = {
   MA200: '#22c55e',
 };
 
-const CustomTooltip = ({ active, payload, label, isNormalized }: any) => {
+const CustomTooltip = ({ active, payload, label, isNormalized, metricLabel }: any) => {
   if (!active || !payload || !payload.length) return null;
+
+  // Format date from YYYY-MM-DD to DD-MMM-YY
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('tr-TR', {
+        day: '2-digit',
+        month: 'short',
+        year: '2-digit'
+      }).replace(/ /g, '-').replace(/\./g, '-');
+    } catch {
+      return dateStr;
+    }
+  };
   
   return (
     <div style={{
-      background: 'var(--color-bg-card)',
-      border: '1px solid var(--color-border)',
+      background: 'var(--bg-elevated)',
+      border: '1px solid var(--border-color)',
       borderRadius: '12px',
       padding: '12px 16px',
-      boxShadow: 'var(--shadow-lg)',
+      boxShadow: '0 8px 20px var(--shadow-color)',
     }}>
       <p style={{
         fontFamily: 'var(--font-mono)',
         fontSize: '12px',
-        color: 'var(--color-text-secondary)',
+        color: 'var(--color-muted)',
         marginBottom: '8px',
         fontWeight: 600,
       }}>
-        {label}
+        {metricLabel} - {formatDate(label)}
       </p>
       {payload.map((entry: any, index: number) => {
         if (entry.dataKey?.includes('_MA')) return null;
@@ -82,7 +96,7 @@ const PerformanceChart = ({ data, metricLabel, selectedCodes, isNormalized, show
   return (
     <div className="card" style={{ marginTop: 24, animation: 'scaleIn 0.4s ease-out' }}>
       <div className="section-title" style={{ marginBottom: 16 }}>
-        {metricLabel} Performance {isNormalized ? '(Relative Change %)' : ''}
+        {metricLabel} Performansı {isNormalized ? '(Göreceli Değişim %)' : ''}
       </div>
       <div className="chart-wrapper" style={{ height: 400 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -117,7 +131,7 @@ const PerformanceChart = ({ data, metricLabel, selectedCodes, isNormalized, show
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip isNormalized={isNormalized} />} />
+          <Tooltip content={<CustomTooltip isNormalized={isNormalized} metricLabel={metricLabel} />} />
             <Legend 
               wrapperStyle={{
                 paddingTop: '16px',
@@ -155,7 +169,7 @@ const PerformanceChart = ({ data, metricLabel, selectedCodes, isNormalized, show
                 key={`${code}_MA50`}
                 type="monotone"
                 dataKey={`${code}_MA50`}
-                name={`${code} MA50`}
+                name={`${code} HO50`}
                 stroke={maColors.MA50}
                 strokeWidth={1.5}
                 strokeDasharray="5 5"
@@ -169,7 +183,7 @@ const PerformanceChart = ({ data, metricLabel, selectedCodes, isNormalized, show
                 key={`${code}_MA200`}
                 type="monotone"
                 dataKey={`${code}_MA200`}
-                name={`${code} MA200`}
+                name={`${code} HO200`}
                 stroke={maColors.MA200}
                 strokeWidth={1.5}
                 strokeDasharray="8 4"

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FundOverview } from '../types';
 import { calculateSharpeRatio, formatSharpeRatio } from '../utils/analytics';
 import { formatTry6 } from '../utils/format';
@@ -9,6 +10,8 @@ interface Props {
 }
 
 const FundCard = ({ fund, onRemove, color }: Props) => {
+  const [copied, setCopied] = useState(false);
+
   // Get latest price from priceHistory
   const latestPrice = fund.priceHistory && fund.priceHistory.length > 0
     ? fund.priceHistory[fund.priceHistory.length - 1].value
@@ -19,14 +22,40 @@ const FundCard = ({ fund, onRemove, color }: Props) => {
     ? calculateSharpeRatio(fund.priceHistory)
     : null;
 
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(fund.code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="card fund-card" style={color ? { borderLeftColor: color } : undefined}>
       <div className="fund-card-header">
         <div className="fund-card-header-left">
-          <span className="fund-card-code">{fund.code}</span>
+          <div className="fund-code-wrapper" onClick={handleCopy} title="Kodu Kopyala">
+            <span className="fund-card-code">{fund.code}</span>
+            <span className={`copy-badge ${copied ? 'visible' : ''}`}>
+              {copied ? 'Kopyalandı!' : ''}
+            </span>
+            <button
+              className={`copy-btn ${copied ? 'copied' : ''}`}
+              aria-label={`${fund.code} kodunu kopyala`}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {copied ? (
+                  <polyline points="20 6 9 17 4 12" />
+                ) : (
+                  <>
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </>
+                )}
+              </svg>
+            </button>
+          </div>
           {sharpeRatio !== null && (
-            <span className="fund-card-sharpe" title="Sharpe Ratio">
+            <span className="fund-card-sharpe" title="Sharpe Oranı: Fonun birim risk başına getirisini ölçer.">
               SR: {formatSharpeRatio(sharpeRatio)}
             </span>
           )}
