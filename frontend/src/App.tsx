@@ -200,13 +200,17 @@ const App = () => {
       // Determine the actual number of days for 'YBB'
       const daysParam = activeTimeFilter.days === 'ybb' ? getDaysForYBB() : (activeTimeFilter.days as number);
 
-      // Find codes that don't have details yet or need updating due to range change
+      // Find codes that don't have details yet or need updating due to range change.
+      // Use a trading-days estimate (markets trade ~5/7 days) with tolerance to avoid
+      // spurious refetches: daysParam is in calendar days but history.length counts
+      // only trading days, so comparing directly always undershoots.
+      const minTradingDays = Math.floor(daysParam * (5 / 7) * 0.95 * 0.8);
       const toFetch = selectedCodes.filter(
         ({ code }) => {
           const existingFund = selectedFunds.find((f) => f.code === code);
           if (!existingFund) return true;
           const history = existingFund[activeMetric.key as keyof FundOverview] as HistoricalPoint[];
-          return !history || history.length < daysParam;
+          return !history || history.length < minTradingDays;
         }
       );
 
