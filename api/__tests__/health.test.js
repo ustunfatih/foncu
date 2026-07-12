@@ -1,7 +1,7 @@
 const from = jest.fn();
 
 jest.mock('../_lib/supabase', () => ({ from: (...args) => from(...args) }));
-const health = require('../health');
+const health = require('../_lib/health');
 
 function res() {
   return {

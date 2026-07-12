@@ -39,8 +39,8 @@ create table if not exists public.portfolio_holdings (
   unique (portfolio_id, fund_code)
 );
 
-create index if not exists historical_data_fund_date_idx on public.historical_data (fund_code, date desc);
-create index if not exists portfolios_user_idx on public.portfolios (user_id);
+create index if not exists idx_historical_fund_date on public.historical_data (fund_code, date desc);
+create index if not exists idx_portfolios_user_id on public.portfolios (user_id);
 create index if not exists portfolio_holdings_portfolio_idx on public.portfolio_holdings (portfolio_id);
 
 alter table public.funds enable row level security;

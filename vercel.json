@@ -17,6 +17,10 @@
   "framework": null,
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "/api/funds?health=1"
+    },
+    {
       "source": "/api/sync-fintables-daily",
       "destination": "/api/sync-fintables?phase=daily"
     },

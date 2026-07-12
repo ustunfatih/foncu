@@ -1,17 +1,8 @@
-const supabase = require('./_lib/supabase');
+const supabase = require('./supabase');
 
 const STALE_AFTER_MS = 36 * 60 * 60 * 1000;
 
-function freshness(updatedAt) {
-  if (!updatedAt) return { updatedAt: null, stale: true };
-  const timestamp = new Date(updatedAt).getTime();
-  return {
-    updatedAt,
-    stale: !Number.isFinite(timestamp) || Date.now() - timestamp > STALE_AFTER_MS,
-  };
-}
-
-module.exports = async function health(req, res) {
+module.exports = async function handleHealth(_req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!supabase) {
     return res.status(503).json({
@@ -30,12 +21,14 @@ module.exports = async function health(req, res) {
       .maybeSingle();
     if (error) throw error;
 
-    const dataFreshness = freshness(data?.guncelleme_zamani);
-    return res.status(dataFreshness.stale ? 200 : 200).json({
+    const updatedAt = data?.guncelleme_zamani || null;
+    const timestamp = updatedAt ? new Date(updatedAt).getTime() : NaN;
+    const stale = !Number.isFinite(timestamp) || Date.now() - timestamp > STALE_AFTER_MS;
+    return res.status(200).json({
       ok: true,
-      status: dataFreshness.stale ? 'degraded' : 'healthy',
+      status: stale ? 'degraded' : 'healthy',
       dependencies: { database: { configured: true, reachable: true } },
-      data: { fundProfiles: dataFreshness },
+      data: { fundProfiles: { updatedAt, stale } },
     });
   } catch (error) {
     console.error('[health] database check failed', error.message);

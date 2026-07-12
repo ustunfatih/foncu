@@ -2,6 +2,7 @@ const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { ensureSupabase } = require('./_lib/supabase-guard');
 const { enforceRateLimit } = require('./_lib/rate-limit');
+const handleHealth = require('./_lib/health');
 
 const PAGE_SIZE = 1000;
 
@@ -53,6 +54,7 @@ async function fetchLegacyFundRows(kind) {
 }
 
 module.exports = async (req, res) => {
+  if (req.query.health === '1') return handleHealth(req, res);
   if (!enforceRateLimit(req, res, { name: 'funds', limit: 90 })) return;
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
   if (!ensureSupabase(res)) return;
