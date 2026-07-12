@@ -1,6 +1,8 @@
 const supabase = require('./_lib/supabase');
 const { TTL, createCacheKey, getOrSetCache } = require('./_lib/cache');
 const { ensureSupabase } = require('./_lib/supabase-guard');
+const { enforceRateLimit } = require('./_lib/rate-limit');
+const handleHealth = require('./_lib/health');
 
 const PAGE_SIZE = 1000;
 
@@ -34,7 +36,26 @@ async function fetchFundRows({ fon_tipi, tefasOnly = false }) {
   return rows;
 }
 
+async function fetchLegacyFundRows(kind) {
+  const rows = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('funds')
+      .select('code, title, kind, updated_at')
+      .eq('kind', kind)
+      .order('code')
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = data || [];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 module.exports = async (req, res) => {
+  if (req.query.health === '1') return handleHealth(req, res);
+  if (!enforceRateLimit(req, res, { name: 'funds', limit: 90 })) return;
   res.setHeader('Cache-Control', 's-maxage=900, stale-while-revalidate=3600');
   if (!ensureSupabase(res)) return;
 
@@ -53,7 +74,20 @@ module.exports = async (req, res) => {
       createCacheKey('funds', { kind, fon_tipi, tefasOnly }),
       TTL.FUND_MASTER,
       async () => {
-        const data = await fetchFundRows({ fon_tipi, tefasOnly });
+        let data;
+        let source = 'fund_profiles';
+        try {
+          data = await fetchFundRows({ fon_tipi, tefasOnly });
+        } catch (profileError) {
+          console.warn('[funds] fund_profiles unavailable; using legacy funds table', profileError.message);
+          const legacyRows = await fetchLegacyFundRows(kind);
+          source = 'funds';
+          data = legacyRows.map((row) => ({
+            fon_kodu: row.code,
+            unvan: row.title,
+            guncelleme_zamani: row.updated_at,
+          }));
+        }
 
         const funds = (data || []).map((f) => ({
           code: f.fon_kodu,
@@ -67,7 +101,7 @@ module.exports = async (req, res) => {
           .sort()
           .at(-1) || null;
 
-        return { funds, latestRefresh };
+        return { funds, latestRefresh, source };
       }
     );
 
@@ -75,12 +109,17 @@ module.exports = async (req, res) => {
       funds: value.funds,
       meta: {
         cached,
-        source: 'fund_profiles',
+        source: value.source,
         refreshedAt: value.latestRefresh,
+        stale: !value.latestRefresh || Date.now() - new Date(value.latestRefresh).getTime() > 36 * 60 * 60 * 1000,
       },
     });
   } catch (err) {
     console.error('[funds] Error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(503).json({
+      error: 'Fon listesi şu anda kullanılamıyor',
+      code: 'DATA_SOURCE_UNAVAILABLE',
+      retryable: true,
+    });
   }
 };

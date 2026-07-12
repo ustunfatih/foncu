@@ -13,9 +13,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/dist",
   "devCommand": "cd frontend && npm run dev",
-  "installCommand": "npm install",
+  "installCommand": "npm ci && npm ci --prefix frontend",
   "framework": null,
   "rewrites": [
+    {
+      "source": "/api/health",
+      "destination": "/api/funds?health=1"
+    },
     {
       "source": "/api/sync-fintables-daily",
       "destination": "/api/sync-fintables?phase=daily"

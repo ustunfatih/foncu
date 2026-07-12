@@ -47,18 +47,18 @@ Interactive performance tracking dashboard for Turkish investment funds (TEFAS).
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/tefas-crawler.git
-cd tefas-crawler
+git clone https://github.com/ustunfatih/foncu.git
+cd foncu
 ```
 
 ### 2. Install dependencies
 ```bash
 # Backend
-npm install
+npm ci
 
 # Frontend
 cd frontend
-npm install
+npm ci
 cd ..
 ```
 
@@ -69,57 +69,21 @@ Create `.env` in the root directory:
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-```
-
-Create `frontend/.env`:
-```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_anon_key
+CRON_SECRET=at_least_16_random_characters
 ```
 
 ### 4. Setup Supabase database
 
-Run this SQL in your Supabase SQL Editor:
+Apply every file in `supabase/migrations/` in timestamp order. Do not use the legacy root `supabase-schema.sql` as the schema source of truth. Then run `npm run verify:config -- --production` and check `/api/health`.
 
-```sql
--- Fund metadata
-CREATE TABLE funds (
-  code TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  kind TEXT NOT NULL,
-  latest_date DATE,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Historical price/investor/market cap data
-CREATE TABLE historical_data (
-  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  fund_code TEXT REFERENCES funds(code),
-  date DATE NOT NULL,
-  price NUMERIC,
-  market_cap NUMERIC,
-  investor_count INTEGER,
-  UNIQUE(fund_code, date)
-);
-
--- User portfolios
-CREATE TABLE portfolios (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id),
-  name TEXT DEFAULT 'My Portfolio',
-  fund_list JSONB NOT NULL DEFAULT '[]',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-```
-
-### 5. Enable GitHub OAuth (optional)
+### 5. Configure authentication (optional)
 
 1. Go to Supabase Dashboard → Authentication → Providers
-2. Enable GitHub provider
-3. Create GitHub OAuth App at https://github.com/settings/developers
-4. Set callback URL: `https://your-project.supabase.co/auth/v1/callback`
-5. Copy Client ID and Secret to Supabase
+2. Keep email Magic Links enabled and enable Google for the primary retail sign-in flow.
+3. Add local, preview, and production `/auth/callback` URLs to the redirect allowlist.
+4. Optionally enable GitHub as a secondary provider.
 
 ## 🚀 Development
 
@@ -149,10 +113,13 @@ git push origin main
 ### 2. Deploy to Vercel
 1. Import your GitHub repository
 2. Framework Preset: **Vite**
-3. Root Directory: `frontend`
+3. Root Directory: repository root
 4. Add environment variables:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `CRON_SECRET`
 
 ### 3. Configure Serverless Functions
 The `api/` directory will be automatically deployed as Vercel Serverless Functions.
@@ -165,13 +132,18 @@ Returns list of available funds for the specified type.
 ### `GET /api/fund-history?code={FUND_CODE}&kind={KIND}&days={DAYS}`
 Returns historical data for a specific fund.
 
+### `GET /api/health`
+Returns database reachability and fund-profile freshness without exposing credentials.
+
 **Parameters:**
 - `code`: Fund code (e.g., TLY, AAK)
 - `kind`: Fund type (YAT, EMK, BYF)
 - `days`: Number of days or 'ybb' for year-to-date
 
-### `GET /api/sync-fintables?secret={CRON_SECRET}&phase={PHASE}`
+### `GET|POST /api/sync-fintables?phase={PHASE}`
 Triggers a protected Fintables sync phase for operational refresh jobs.
+
+Send `Authorization: Bearer <CRON_SECRET>`. Query-string secrets are rejected.
 
 **Supported phases in Vercel runtime:** `all`, `daily`, `profiles`, `metrics`, `events`  
 **Unsupported in Vercel runtime:** `holdings` (returns a clear `501` response and does not start sync work).

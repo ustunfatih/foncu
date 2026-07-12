@@ -1,17 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FundSelector from './components/FundSelector';
 import FundCard from './components/FundCard';
-import PerformanceChart from './components/PerformanceChart';
 import EmptyState from './components/EmptyState';
-import ExportPage from './pages/ExportPage';
-import FundScreenerPage from './pages/FundScreenerPage';
-import PortfolioPage from './pages/PortfolioPage';
-import BenchmarkPage from './pages/BenchmarkPage';
-import MacroPage from './pages/MacroPage';
-import TechnicalScannerPage from './pages/TechnicalScannerPage';
-import EventsPage from './pages/EventsPage';
-import OrtusmeTab from './pages/OrtusmeTab';
-import { FundProfileDrawer } from './components/FundProfileDrawer';
+import AuthMenu from './components/AuthMenu';
 import { ChartSkeleton, FundCardSkeleton } from './components/LoadingSkeleton';
 import { fetchFundDetails, fetchFunds } from './api';
 import { FundKind, FundOverview, FundSummary, HistoricalPoint } from './types';
@@ -25,6 +16,17 @@ import {
   formatVolatility,
   formatMaxDrawdown
 } from './utils/analytics';
+
+const ExportPage = lazy(() => import('./pages/ExportPage'));
+const FundScreenerPage = lazy(() => import('./pages/FundScreenerPage'));
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage'));
+const BenchmarkPage = lazy(() => import('./pages/BenchmarkPage'));
+const MacroPage = lazy(() => import('./pages/MacroPage'));
+const TechnicalScannerPage = lazy(() => import('./pages/TechnicalScannerPage'));
+const EventsPage = lazy(() => import('./pages/EventsPage'));
+const OrtusmeTab = lazy(() => import('./pages/OrtusmeTab'));
+const PerformanceChart = lazy(() => import('./components/PerformanceChart'));
+const FundProfileDrawer = lazy(() => import('./components/FundProfileDrawer').then(module => ({ default: module.FundProfileDrawer })));
 
 const timeFilters = [
   { label: '1G', days: 1 },
@@ -56,20 +58,37 @@ const fundColors = ['#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea'];
 const SELECTED_CODES_KEY = 'foncu_selectedCodes';
 const THEME_STORAGE_KEY = 'foncu_theme';
 type ThemeMode = 'light' | 'dark';
+type AppTab = 'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export' | 'ortusme';
+
+const tabPaths: Record<AppTab, string> = {
+  home: '/',
+  screener: '/kesfet',
+  portfolio: '/portfoy',
+  benchmark: '/karsilastir',
+  macro: '/piyasa/makro',
+  technical: '/piyasa/teknik',
+  events: '/piyasa/takvim',
+  export: '/araclar/disari-aktar',
+  ortusme: '/karsilastir/ortusme',
+};
+
+const tabFromPath = (pathname: string): AppTab => (
+  (Object.entries(tabPaths).find(([, path]) => path === pathname)?.[0] as AppTab | undefined) || 'home'
+);
 
 const App = () => {
   // Read URL params on mount to support deep-linking into Örtüşme tab
   const initialTab = (() => {
-    const p = new URLSearchParams(window.location.search).get('tab');
-    if (p === 'ortusme') return 'ortusme' as const;
-    return 'home' as const;
+    const legacyTab = new URLSearchParams(window.location.search).get('tab');
+    if (legacyTab === 'ortusme') return 'ortusme' as const;
+    return tabFromPath(window.location.pathname);
   })();
   const initialFunds = (() => {
     const f = new URLSearchParams(window.location.search).get('funds');
     return f ? f.split(',').slice(0, 5) : [];
   })();
 
-  const [activeTab, setActiveTab] = useState<'home' | 'screener' | 'portfolio' | 'benchmark' | 'macro' | 'technical' | 'events' | 'export' | 'ortusme'>(initialTab);
+  const [activeTab, setActiveTab] = useState<AppTab>(initialTab);
   const [profileDrawerCode, setProfileDrawerCode] = useState<string | null>(null);
   const [profileDrawerIndex, setProfileDrawerIndex] = useState(0);
   const [overlapFunds, setOverlapFunds] = useState<string[]>(initialFunds);
@@ -102,26 +121,33 @@ const App = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const hasUserTouchedSelectionRef = useRef(false);
   const hasHydratedPortfolioRef = useRef(false);
-  const { user, signInWithGithub, signOut } = useAuth();
+  const { user } = useAuth();
   const isAuthEnabled = isSupabaseConfigured;
 
   // Save current selection to Supabase
   const savePortfolio = async () => {
-    if (!isAuthEnabled || !user || selectedCodes.length === 0) return;
-    try {
-      const { error } = await supabase.from('portfolios').upsert({
+    if (!isAuthEnabled || !user || selectedCodes.length === 0) throw new Error('Kaydedilecek fon seçimi bulunmuyor.');
+    const { error } = await supabase.from('portfolios').upsert({
         user_id: user.id,
         name: 'My Portfolio',
         fund_list: selectedCodes,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id,name' });
-      if (error) throw error;
-      alert('Portföy kaydedildi!');
-    } catch (err) {
-      console.error('Save failed:', err);
-      alert('Portföy kaydedilemedi.');
-    }
+    if (error) throw error;
   };
+
+  const navigateToTab = useCallback((tab: AppTab) => {
+    setActiveTab(tab);
+    const search = tab === 'ortusme' && overlapFunds.length ? `?funds=${overlapFunds.join(',')}` : '';
+    window.history.pushState({ tab }, '', `${tabPaths[tab]}${search}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [overlapFunds]);
+
+  useEffect(() => {
+    const handlePopState = () => setActiveTab(tabFromPath(window.location.pathname));
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Load portfolio from Supabase on login
   useEffect(() => {
@@ -381,40 +407,21 @@ const App = () => {
 
   return (
     <div className="container">
+      <a className="skip-link" href="#main-content">İçeriğe geç</a>
       <header className="page-header">
         <div>
-          <p className="title">TEFAS Fon Takip Masası</p>
-          <p className="subtitle">Yatırım fonları için etkileşimli performans takip ve analiz platformu</p>
+          <p className="brand-kicker">Foncu</p>
+          <p className="title">Fonlarınızı veriye bakarak değerlendirin.</p>
+          <p className="subtitle">TEFAS fonlarını karşılaştırın, portföyünüzün riskini ve gerçek hisse maruziyetini görün.</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {user ? (
-            <>
-              <span style={{ fontSize: 14, color: 'var(--color-muted)' }}>{user.email || user.user_metadata?.user_name}</span>
-              <button className="chip active" onClick={savePortfolio} disabled={selectedCodes.length === 0}>
-                💾 Kaydet
-              </button>
-              <button className="chip" onClick={signOut}>Çıkış</button>
-            </>
-          ) : (
-            <button
-              className="github-login-btn"
-              onClick={signInWithGithub}
-              disabled={!isAuthEnabled}
-              title={!isAuthEnabled ? 'Supabase ortam değişkenleri eksik.' : 'GitHub ile giriş'}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-              </svg>
-              GitHub ile Giriş
-            </button>
-          )}
+        <div className="header-actions">
+          <AuthMenu canSave={selectedCodes.length > 0} onSave={savePortfolio} />
           <button
             type="button"
             className={`chip theme-toggle ${theme === 'dark' ? 'active' : ''}`}
             onClick={handleThemeToggle}
             aria-label={theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç'}
             title={theme === 'dark' ? 'Açık temaya geç' : 'Koyu temaya geç'}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '42px', height: '42px', padding: 0 }}
           >
             {theme === 'dark' ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -437,73 +444,57 @@ const App = () => {
         </div>
       </header>
 
-      {/* Tab Navigation */}
-      <div className="tabs">
+      <nav className="app-nav" aria-label="Ana gezinme">
+        <div className="tabs tabs-primary">
         <button
           className={`tab ${activeTab === 'home' ? 'active' : ''}`}
-          onClick={() => setActiveTab('home')}
+          onClick={() => navigateToTab('home')}
         >
-          Anasayfa
+          Genel Bakış
         </button>
         <button
           className={`tab ${activeTab === 'screener' ? 'active' : ''}`}
-          onClick={() => setActiveTab('screener')}
+          onClick={() => navigateToTab('screener')}
         >
-          Fon Tarayıcı
+          Keşfet
         </button>
         <button
           className={`tab ${activeTab === 'portfolio' ? 'active' : ''}`}
-          onClick={() => setActiveTab('portfolio')}
+          onClick={() => navigateToTab('portfolio')}
         >
           Portföy
         </button>
         <button
           className={`tab ${activeTab === 'benchmark' ? 'active' : ''}`}
-          onClick={() => setActiveTab('benchmark')}
+          onClick={() => navigateToTab('benchmark')}
         >
-          Benchmark
+          Karşılaştır
         </button>
-        <button
-          className={`tab ${activeTab === 'macro' ? 'active' : ''}`}
-          onClick={() => setActiveTab('macro')}
-        >
-          Makro
-        </button>
-        <button
-          className={`tab ${activeTab === 'technical' ? 'active' : ''}`}
-          onClick={() => setActiveTab('technical')}
-        >
-          Teknik Tarama
-        </button>
-        <button
-          className={`tab ${activeTab === 'events' ? 'active' : ''}`}
-          onClick={() => setActiveTab('events')}
-        >
-          Takvim
-        </button>
-        <button
-          className={`tab ${activeTab === 'export' ? 'active' : ''}`}
-          onClick={() => setActiveTab('export')}
-        >
-          Export
-        </button>
-        <button
-          className={`tab ${activeTab === 'ortusme' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ortusme')}
-        >
-          Örtüşme ✦
-        </button>
-      </div>
+        </div>
+        <details className="more-menu">
+          <summary className="tab">Diğer araçlar</summary>
+          <div className="more-menu-panel">
+            <button className="menu-action" onClick={() => navigateToTab('ortusme')}>Örtüşme analizi</button>
+            <button className="menu-action" onClick={() => navigateToTab('macro')}>Makro göstergeler</button>
+            <button className="menu-action" onClick={() => navigateToTab('technical')}>Teknik tarama</button>
+            <button className="menu-action" onClick={() => navigateToTab('events')}>Takvim ve haberler</button>
+            <button className="menu-action" onClick={() => navigateToTab('export')}>Dışa aktar</button>
+          </div>
+        </details>
+      </nav>
 
-      {/* Conditional Page Rendering */}
-      {activeTab === 'export' && <ExportPage fundKind={fundKind} />}
-      {activeTab === 'screener' && <FundScreenerPage />}
-      {activeTab === 'portfolio' && <PortfolioPage />}
-      {activeTab === 'benchmark' && <BenchmarkPage />}
-      {activeTab === 'macro' && <MacroPage />}
-      {activeTab === 'technical' && <TechnicalScannerPage />}
-      {activeTab === 'events' && <EventsPage />}
-      {activeTab === 'ortusme' && <OrtusmeTab initialFunds={overlapFunds} />}
+      <main id="main-content">
+
+      <Suspense fallback={<div className="card page-loading" role="status">Araç yükleniyor…</div>}>
+        {activeTab === 'export' && <ExportPage fundKind={fundKind} />}
+        {activeTab === 'screener' && <FundScreenerPage />}
+        {activeTab === 'portfolio' && <PortfolioPage />}
+        {activeTab === 'benchmark' && <BenchmarkPage />}
+        {activeTab === 'macro' && <MacroPage />}
+        {activeTab === 'technical' && <TechnicalScannerPage />}
+        {activeTab === 'events' && <EventsPage />}
+        {activeTab === 'ortusme' && <OrtusmeTab initialFunds={overlapFunds} />}
+      </Suspense>
 
       {activeTab === 'home' && (
         <>
@@ -656,13 +647,15 @@ const App = () => {
               {loadingDetails ? (
                 <ChartSkeleton />
               ) : (
-                <PerformanceChart
-                  data={chartData}
-                  metricLabel={activeMetric.label}
-                  selectedCodes={selectedCodes.map(s => s.code)}
-                  isNormalized={isNormalized}
-                  showMA={showMA}
-                />
+                <Suspense fallback={<ChartSkeleton />}>
+                  <PerformanceChart
+                    data={chartData}
+                    metricLabel={activeMetric.label}
+                    selectedCodes={selectedCodes.map(s => s.code)}
+                    isNormalized={isNormalized}
+                    showMA={showMA}
+                  />
+                </Suspense>
               )}
 
               {/* Analytics Panel */}
@@ -712,17 +705,22 @@ const App = () => {
           )}
         </>
       )}
+      </main>
 
-      <FundProfileDrawer
-        fundCode={profileDrawerCode}
-        fundIndex={profileDrawerIndex}
-        onClose={() => setProfileDrawerCode(null)}
-        onAddToOverlap={(code) => {
-          setOverlapFunds(prev => prev.includes(code) ? prev : [...prev, code].slice(0, 5));
-          setProfileDrawerCode(null);
-          setActiveTab('ortusme');
-        }}
-      />
+      {profileDrawerCode && (
+        <Suspense fallback={null}>
+          <FundProfileDrawer
+            fundCode={profileDrawerCode}
+            fundIndex={profileDrawerIndex}
+            onClose={() => setProfileDrawerCode(null)}
+            onAddToOverlap={(code) => {
+              setOverlapFunds(prev => prev.includes(code) ? prev : [...prev, code].slice(0, 5));
+              setProfileDrawerCode(null);
+              navigateToTab('ortusme');
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

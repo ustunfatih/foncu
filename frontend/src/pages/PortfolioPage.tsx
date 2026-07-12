@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { fetchPortfolioValuation, fetchPortfolioExposure } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchFundRisk, fetchPortfolioValuation, fetchPortfolioExposure } from '../api';
 import { formatTry, formatTry6 } from '../utils/format';
 import { PortfolioHoldingInput, PortfolioValuation, PortfolioExposure } from '../types';
 import EmptyState from '../components/EmptyState';
@@ -19,6 +19,7 @@ const PortfolioPage = () => {
   const [exposureLoading, setExposureLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExposure, setShowExposure] = useState(false);
+  const [riskContributions, setRiskContributions] = useState<Array<{ code: string; volatility: number; contribution: number }>>([]);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -32,8 +33,19 @@ const PortfolioPage = () => {
   }, [holdings]);
 
   const addHolding = () => {
-    if (!code.trim() || shares <= 0) return;
-    setHoldings(prev => [...prev, { code: code.trim().toUpperCase(), shares, cost }]);
+    const normalizedCode = code.trim().toUpperCase();
+    if (!/^[A-Z0-9]{2,10}$/.test(normalizedCode) || shares <= 0 || cost < 0) {
+      setError('Geçerli bir fon kodu, pozitif adet ve sıfırdan küçük olmayan maliyet girin.');
+      return;
+    }
+    setError(null);
+    setHoldings(prev => {
+      const existing = prev.find(item => item.code === normalizedCode);
+      if (!existing) return [...prev, { code: normalizedCode, shares, cost }];
+      const totalShares = existing.shares + shares;
+      const weightedCost = ((existing.shares * existing.cost) + (shares * cost)) / totalShares;
+      return prev.map(item => item.code === normalizedCode ? { ...item, shares: totalShares, cost: weightedCost } : item);
+    });
     setCode('');
   };
 
@@ -45,12 +57,41 @@ const PortfolioPage = () => {
       setError(null);
       const data = await fetchPortfolioValuation(holdings);
       setValuation(data);
+      const riskResults = await Promise.allSettled(
+        data.holdings.map(async holding => ({
+          code: holding.code,
+          weight: holding.weight,
+          risk: await fetchFundRisk(holding.code, 365),
+        }))
+      );
+      const raw = riskResults.flatMap(result => {
+        if (result.status !== 'fulfilled' || result.value.risk.metrics.volatility === null) return [];
+        return [{
+          code: result.value.code,
+          volatility: result.value.risk.metrics.volatility,
+          rawContribution: result.value.weight * result.value.risk.metrics.volatility,
+        }];
+      });
+      const totalRisk = raw.reduce((sum, item) => sum + item.rawContribution, 0);
+      setRiskContributions(raw.map(item => ({
+        code: item.code,
+        volatility: item.volatility,
+        contribution: totalRisk > 0 ? item.rawContribution / totalRisk : 0,
+      })));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Portföy hesaplama başarısız');
     } finally {
       setLoading(false);
     }
   };
+
+  const portfolioObservation = useMemo(() => {
+    if (!valuation?.holdings.length) return null;
+    const largest = [...valuation.holdings].sort((a, b) => b.weight - a.weight)[0];
+    if (largest.weight >= 0.4) return `${largest.code}, portföy değerinin %${(largest.weight * 100).toFixed(1)}’ini oluşturuyor. Tek fon yoğunlaşmasını hedef dağılımınızla karşılaştırın.`;
+    if (valuation.holdings.length < 3) return 'Portföy az sayıda fonda yoğunlaşıyor. Yeni fon eklemeden önce mevcut fonların örtüşmesini inceleyin.';
+    return 'Tek bir fon %40 yoğunlaşma eşiğini aşmıyor. Yine de alttaki hisselerde oluşan ortak maruziyeti kontrol edin.';
+  }, [valuation]);
 
   const loadExposure = async () => {
     if (!valuation) return;
@@ -81,7 +122,7 @@ const PortfolioPage = () => {
         </div>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && <div className="error-banner" role="alert">{error}</div>}
 
       {/* Add holding */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -183,6 +224,22 @@ const PortfolioPage = () => {
               </tbody>
             </table>
           </div>
+          {portfolioObservation && <div className="portfolio-observation"><strong>Portföy notu</strong><span>{portfolioObservation}</span></div>}
+          {riskContributions.length > 0 && (
+            <div className="risk-contribution-section">
+              <h3 className="section-title">Tahmini risk katkısı</h3>
+              <p className="method-copy">Son 12 aylık oynaklık ile güncel portföy ağırlığının çarpımına göre göreli katkıdır; korelasyonları içermez.</p>
+              <div className="risk-bars">
+                {riskContributions.sort((a, b) => b.contribution - a.contribution).map(item => (
+                  <div className="risk-bar-row" key={item.code}>
+                    <span>{item.code}</span>
+                    <span className="risk-bar-track"><span style={{ width: `${item.contribution * 100}%` }} /></span>
+                    <strong>%{(item.contribution * 100).toFixed(1)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -233,6 +290,11 @@ const PortfolioPage = () => {
           </div>
         </div>
       )}
+      <aside className="methodology-note">
+        <strong>Veri ve yöntem</strong>
+        <p>Değerleme son kayıtlı TEFAS fiyatlarını, hisse maruziyeti son ortak KAP portföy raporu dönemini kullanır. Tarihler her sonuçta gösterilir; eski veri yatırım kararı için güncel kabul edilmemelidir.</p>
+        <p>Bu ekran yalnızca bilgilendirme amaçlıdır; yatırım danışmanlığı veya kişisel yatırım önerisi değildir.</p>
+      </aside>
     </div>
   );
 };

@@ -52,6 +52,7 @@ describe('sync-fintables security', () => {
     process.env = { ...originalEnv, CRON_SECRET: 'test-secret-123' };
     const handler = require('../sync-fintables');
     const req = {
+      method: 'POST',
       headers: { authorization: 'Bearer test-secret-123' },
       query: {},
     };
@@ -60,22 +61,24 @@ describe('sync-fintables security', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  test('allows access with correct query parameter', async () => {
+  test('rejects access with a correct query parameter', async () => {
     process.env = { ...originalEnv, CRON_SECRET: 'test-secret-123' };
     const handler = require('../sync-fintables');
     const req = {
+      method: 'POST',
       headers: {},
       query: { secret: 'test-secret-123' },
     };
     const res = createRes();
     await handler(req, res);
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
   });
 
   test('denies access with incorrect Bearer token', async () => {
     process.env = { ...originalEnv, CRON_SECRET: 'test-secret-123' };
     const handler = require('../sync-fintables');
     const req = {
+      method: 'POST',
       headers: { authorization: 'Bearer wrong-secret' },
       query: {},
     };
@@ -89,6 +92,7 @@ describe('sync-fintables security', () => {
     process.env = { ...originalEnv, CRON_SECRET: 'test-secret-123' };
     const handler = require('../sync-fintables');
     const req = {
+      method: 'POST',
       headers: {},
       query: { secret: 'wrong-secret' },
     };
@@ -102,6 +106,7 @@ describe('sync-fintables security', () => {
     process.env = { ...originalEnv, CRON_SECRET: 'test-secret-123' };
     const handler = require('../sync-fintables');
     const req = {
+      method: 'POST',
       headers: {},
       query: {},
     };
@@ -114,6 +119,7 @@ describe('sync-fintables security', () => {
     process.env = { ...originalEnv, CRON_SECRET: '' };
     const handler = require('../sync-fintables');
     const req = {
+      method: 'POST',
       headers: { authorization: 'Bearer any' },
       query: { secret: 'any' },
     };

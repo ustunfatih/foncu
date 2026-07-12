@@ -2,6 +2,7 @@ const supabase = require('./_lib/supabase');
 const { fetchLatestPriceBatch } = require('./_lib/history');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
 const { ensureSupabase } = require('./_lib/supabase-guard');
+const { enforceRateLimit } = require('./_lib/rate-limit');
 
 function parseBody(req, res) {
   if (typeof req.body === 'string') {
@@ -197,6 +198,7 @@ async function handleExposure(req, res) {
 }
 
 module.exports = async (req, res) => {
+  if (!enforceRateLimit(req, res, { name: 'portfolio', limit: 30 })) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   try {
@@ -205,6 +207,10 @@ module.exports = async (req, res) => {
     return await handleValuation(req, res);
   } catch (err) {
     console.error('[portfolio] Error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(503).json({
+      error: 'Portföy verileri şu anda kullanılamıyor',
+      code: 'DATA_SOURCE_UNAVAILABLE',
+      retryable: true,
+    });
   }
 };
