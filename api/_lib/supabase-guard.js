@@ -2,7 +2,11 @@ const supabase = require('./supabase');
 
 function ensureSupabase(res) {
   if (supabase) return true;
-  res.status(503).json({ error: 'Supabase not configured' });
+  res.status(503).json({
+    error: 'Veri hizmeti henüz yapılandırılmadı',
+    code: 'DATA_SERVICE_NOT_CONFIGURED',
+    retryable: false,
+  });
   return false;
 }
 

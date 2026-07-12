@@ -34,8 +34,10 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
 
     let parsedMessage: string | null = null;
     try {
-      const parsed = JSON.parse(raw) as { error?: string; message?: string };
-      parsedMessage = parsed.error || parsed.message || null;
+      const parsed = JSON.parse(raw) as { error?: string | { message?: string }; message?: string };
+      parsedMessage = typeof parsed.error === 'string'
+        ? parsed.error
+        : parsed.error?.message || parsed.message || null;
     } catch {
       parsedMessage = null;
     }

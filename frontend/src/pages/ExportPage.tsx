@@ -3,7 +3,6 @@ import { FundKind, FundSummary } from '../types';
 import { fetchFunds, fetchFundDetails } from '../api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import { formatTry, formatTry6 } from '../utils/format';
 
 interface ExportPageProps {
@@ -308,10 +307,18 @@ const ExportPage = ({ fundKind: initialFundKind }: ExportPageProps) => {
             }
         });
 
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'TEFAS Data');
-        XLSX.writeFile(wb, `tefas_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+        const headers = Object.keys(rows[0] || {});
+        const escapeXml = (value: unknown) => String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&apos;');
+        const xmlRows = [headers, ...rows.map(row => headers.map(header => row[header]))]
+            .map(row => `<Row>${row.map(cell => `<Cell><Data ss:Type="String">${escapeXml(cell)}</Data></Cell>`).join('')}</Row>`)
+            .join('');
+        const workbook = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="TEFAS Verileri"><Table>${xmlRows}</Table></Worksheet></Workbook>`;
+        downloadFile(workbook, `tefas_export_${new Date().toISOString().split('T')[0]}.xml`, 'application/vnd.ms-excel;charset=utf-8');
     };
 
     const exportPDF = (fundsData: any[]) => {
@@ -538,7 +545,7 @@ const ExportPage = ({ fundKind: initialFundKind }: ExportPageProps) => {
                             checked={format === 'excel'}
                             onChange={() => setFormat('excel')}
                         />
-                        <span style={{ marginLeft: 8 }}>Excel (.xlsx)</span>
+                        <span style={{ marginLeft: 8 }}>Excel uyumlu çalışma kitabı (.xml)</span>
                     </label>
                     <label className="radio-label">
                         <input

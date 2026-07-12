@@ -6,7 +6,8 @@ interface AuthContextType {
     user: User | null;
     session: Session | null;
     loading: boolean;
-    signInWithGithub: () => Promise<void>;
+    signInWithProvider: (provider: 'google' | 'github') => Promise<void>;
+    signInWithEmail: (email: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -38,30 +39,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => subscription.unsubscribe();
     }, []);
 
-    const signInWithGithub = async () => {
+    const getRedirectTo = () => `${window.location.origin}/auth/callback`;
+
+    const signInWithProvider = async (provider: 'google' | 'github') => {
+        if (!isSupabaseConfigured) throw new Error('Hesap hizmeti henüz yapılandırılmadı.');
         const redirectHost = window.location.origin;
-        const isLocal = redirectHost.includes('localhost');
+        const redirectTo = redirectHost.includes('localhost') ? `${redirectHost}/` : getRedirectTo();
 
-        // Vercel previews use random hostnames; add a deterministic return path we can allowlist.
-        const redirectTo = isLocal
-            ? `${redirectHost}/`
-            : `${redirectHost}/auth/callback`;
-
-        const { error, data } = await supabase.auth.signInWithOAuth({
-            provider: 'github',
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider,
             options: {
                 redirectTo,
-                // Force PKCE + redirect flow (popup can be blocked on some browsers)
-                queryParams: { prompt: 'consent' }
+                queryParams: provider === 'google' ? { prompt: 'select_account' } : undefined,
             }
         });
+        if (error) throw error;
+    };
 
-        if (error) {
-            console.error('GitHub login error:', error, 'redirectTo:', redirectTo);
-            alert('GitHub ile giriş yapılamadı. Lütfen tekrar deneyin.');
-        } else {
-            console.info('GitHub OAuth started', data?.url, 'redirectTo:', redirectTo);
-        }
+    const signInWithEmail = async (email: string) => {
+        if (!isSupabaseConfigured) throw new Error('Hesap hizmeti henüz yapılandırılmadı.');
+        const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: getRedirectTo(), shouldCreateUser: true },
+        });
+        if (error) throw error;
     };
 
     const signOut = async () => {
@@ -72,7 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, session, loading, signInWithGithub, signOut }}>
+        <AuthContext.Provider value={{ user, session, loading, signInWithProvider, signInWithEmail, signOut }}>
             {children}
         </AuthContext.Provider>
     );

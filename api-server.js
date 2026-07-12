@@ -13,6 +13,7 @@ const ROUTE_MODULES = {
   'fund-screen': './api/fund-screen',
   'fund-technical-scan': './api/fund-technical-scan',
   funds: './api/funds',
+  health: './api/health',
   'holdings-screener': './api/holdings-screener',
   'macro-series': './api/macro-series',
   'market-events': './api/market-events',
@@ -64,7 +65,8 @@ function resolveApiRoute(rawRoute) {
 
 function createApp() {
   const app = express();
-  app.use(express.json());
+  app.disable('x-powered-by');
+  app.use(express.json({ limit: '64kb' }));
 
   // Static allowlisted loader for Vercel-like functions
   app.use('/api', async (req, res) => {

@@ -222,7 +222,7 @@ test('accepts one-time Fintables token only from x-fintables-token header', asyn
   expect(syncFundHoldings).toHaveBeenCalledWith(expect.any(Array), 'header-token');
 });
 
-test('rejects non-POST manual invocations', async () => {
+test('allows authenticated GET cron invocations without a custom header', async () => {
   const req = {
     method: 'GET',
     headers: { authorization: 'Bearer test-secret' },
@@ -232,8 +232,7 @@ test('rejects non-POST manual invocations', async () => {
 
   await handler(req, res);
 
-  expect(res.statusCode).toBe(405);
-  expect(res.payload.error).toContain('Use POST for manual runs');
+  expect(res.statusCode).toBe(200);
 });
 
 test('allows GET for vercel cron requests', async () => {
@@ -241,7 +240,6 @@ test('allows GET for vercel cron requests', async () => {
     method: 'GET',
     headers: {
       authorization: 'Bearer test-secret',
-      'x-vercel-cron': '1',
     },
     query: { phase: 'daily' },
   };

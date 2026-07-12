@@ -1,7 +1,11 @@
 const { syncFundProfiles, syncFundAllocations } = require('./_lib/providers/fund-profiles-provider');
 const { syncFundMetrics } = require('./_lib/providers/fund-metrics-provider');
 const { backfillMissingMetricHistory } = require('./_lib/providers/fund-history-provider');
-const { syncFundHoldings, syncKapEvents } = require('./_lib/providers/fund-holdings-provider');
+const {
+  HOLDINGS_UNSUPPORTED_REASON,
+  syncFundHoldings,
+  syncKapEvents,
+} = require('./_lib/providers/fund-holdings-provider');
 const crypto = require('crypto');
 const { invalidateCacheByPrefix } = require('./_lib/cache');
 
@@ -23,20 +27,18 @@ function safeCompare(provided, expected) {
 
 module.exports = async (req, res) => {
   const requestMethod = (req.method || 'GET').toString().toUpperCase();
-  const isVercelCronRequest = ['1', 'true'].includes(String(req.headers['x-vercel-cron']).toLowerCase());
   const isManualPost = requestMethod === 'POST';
+  const bearerToken = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '');
+  const hasValidBearer = !!CRON_SECRET && safeCompare(bearerToken, CRON_SECRET);
 
-  if (!isManualPost && !(requestMethod === 'GET' && isVercelCronRequest)) {
+  if (!isManualPost && requestMethod !== 'GET') {
     return res.status(405).json({
       error: 'Method Not Allowed. Use POST for manual runs.',
     });
   }
 
   // Vercel cron/manual callers must send Authorization: Bearer <CRON_SECRET>
-  const bearerToken = (req.headers['authorization'] || '').replace('Bearer ', '');
-  const isVercelCron = !!CRON_SECRET && safeCompare(bearerToken, CRON_SECRET);
-  const isManual = !!CRON_SECRET && safeCompare(req.query.secret, CRON_SECRET);
-  if (!isVercelCron && !isManual) {
+  if (!hasValidBearer) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

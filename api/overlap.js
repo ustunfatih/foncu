@@ -1,9 +1,11 @@
 const supabase = require('./_lib/supabase');
+const { enforceRateLimit } = require('./_lib/rate-limit');
 const { groupByFund, buildMatrix } = require('./_lib/overlap-calc');
 const { resolveLatestCommonHoldingsPeriod } = require('./_lib/holdings-periods');
 const { ensureSupabase } = require('./_lib/supabase-guard');
 
 module.exports = async (req, res) => {
+  if (!enforceRateLimit(req, res, { name: 'overlap', limit: 30 })) return;
   res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400');
   if (!ensureSupabase(res)) return;
 
@@ -75,6 +77,10 @@ module.exports = async (req, res) => {
     });
   } catch (err) {
     console.error('[overlap] Error:', err);
-    return res.status(500).json({ error: err.message });
+    return res.status(503).json({
+      error: 'Örtüşme verileri şu anda kullanılamıyor',
+      code: 'DATA_SOURCE_UNAVAILABLE',
+      retryable: true,
+    });
   }
 };
