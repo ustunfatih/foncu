@@ -3,6 +3,8 @@ const { bootstrapSession, fetchInfo, formatDate, toISO } = require('../tefas');
 const { upsertRows } = require('../sync-helpers');
 
 const LOOKBACK_DAYS = 420;
+const FULL_HISTORY_LOOKBACK_DAYS = 365 * 5;
+const TEFAS_MAX_RANGE_DAYS = 30;
 const TEFAS_KIND_BY_FUND_TYPE = {
   mutual: 'YAT',
   pension: 'EMK',
@@ -35,7 +37,7 @@ async function loadProfilesForHistoryBackfill(profiles) {
   return data || [];
 }
 
-function buildDateChunks(startDate, endDate, maxDays = 90) {
+function buildDateChunks(startDate, endDate, maxDays = TEFAS_MAX_RANGE_DAYS) {
   const chunks = [];
   let currentEnd = new Date(endDate);
   currentEnd.setUTCHours(0, 0, 0, 0);
@@ -62,7 +64,8 @@ function buildDateChunks(startDate, endDate, maxDays = 90) {
 }
 
 function buildHistoricalUpsertRows(code, tefasRows) {
-  const rowsByDate = new Map();
+  const rowsByFundAndDate = new Map();
+  const fallbackCode = (code || '').toString().trim().toUpperCase();
 
   for (const row of tefasRows || []) {
     if (!row?.TARIH || row.FIYAT == null) continue;
@@ -70,9 +73,12 @@ function buildHistoricalUpsertRows(code, tefasRows) {
     const price = Number(row.FIYAT);
     if (!Number.isFinite(price) || price <= 0) continue;
 
+    const fundCode = (row.FONKODU || fallbackCode).toString().trim().toUpperCase();
+    if (!fundCode) continue;
+
     const date = toISO(row.TARIH);
-    rowsByDate.set(date, {
-      fund_code: code,
+    rowsByFundAndDate.set(`${fundCode}:${date}`, {
+      fund_code: fundCode,
       date,
       price,
       market_cap: row.PORTFOYBUYUKLUK != null ? Number(row.PORTFOYBUYUKLUK) || 0 : 0,
@@ -80,7 +86,9 @@ function buildHistoricalUpsertRows(code, tefasRows) {
     });
   }
 
-  return Array.from(rowsByDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+  return Array.from(rowsByFundAndDate.values()).sort((a, b) => (
+    a.date.localeCompare(b.date) || a.fund_code.localeCompare(b.fund_code)
+  ));
 }
 
 async function fetchLongRangeHistory(profile, cookie, startDate, endDate) {
@@ -184,7 +192,9 @@ async function backfillMissingMetricHistory(profiles, log, options = {}) {
 }
 
 module.exports = {
+  FULL_HISTORY_LOOKBACK_DAYS,
   LOOKBACK_DAYS,
+  TEFAS_MAX_RANGE_DAYS,
   TEFAS_KIND_BY_FUND_TYPE,
   backfillMissingMetricHistory,
   buildDateChunks,

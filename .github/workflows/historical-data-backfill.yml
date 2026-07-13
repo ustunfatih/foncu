@@ -1,0 +1,79 @@
+name: TEFAS Historical Data Backfill
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Optional start date in YYYY-MM-DD; defaults to five years ago'
+        required: false
+        type: string
+      end_date:
+        description: 'Optional end date in YYYY-MM-DD; defaults to today'
+        required: false
+        type: string
+      fund_code:
+        description: 'Optional focused fund code'
+        required: false
+        type: string
+      fund_kind:
+        description: 'Fund kind for a focused run'
+        required: false
+        default: 'YAT'
+        type: choice
+        options:
+          - YAT
+          - EMK
+          - BYF
+      cooldown_ms:
+        description: 'Delay between TEFAS requests'
+        required: false
+        default: '1500'
+        type: string
+
+concurrency:
+  group: tefas-historical-data-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill-history:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Backfill and verify TEFAS history
+        env:
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+          FUND_CODE: ${{ inputs.fund_code }}
+          FUND_KIND: ${{ inputs.fund_kind || 'YAT' }}
+          COOLDOWN_MS: ${{ inputs.cooldown_ms || '1500' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS=(--cooldown-ms "$COOLDOWN_MS")
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            START_DATE="$(date -u -d '45 days ago' +%F)"
+            END_DATE="$(date -u +%F)"
+          fi
+          if [ -n "$START_DATE" ]; then ARGS+=(--start-date "$START_DATE"); fi
+          if [ -n "$END_DATE" ]; then ARGS+=(--end-date "$END_DATE"); fi
+          if [ -n "$FUND_CODE" ]; then
+            ARGS+=(--fund-code "$FUND_CODE" --kind "$FUND_KIND")
+          fi
+          npm run backfill:history -- "${ARGS[@]}"

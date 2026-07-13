@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "backfill:history": "node scripts/backfill-tefas-history.js",
     "dev": "concurrently \"node api-server.js\" \"cd frontend && npm run dev\"",
     "build": "npm run build --prefix frontend",
     "check:csp": "node scripts/check-csp.js",

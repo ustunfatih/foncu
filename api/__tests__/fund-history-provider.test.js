@@ -1,4 +1,6 @@
 const {
+  FULL_HISTORY_LOOKBACK_DAYS,
+  TEFAS_MAX_RANGE_DAYS,
   buildDateChunks,
   buildHistoricalUpsertRows,
   requiresLongHorizonBackfill,
@@ -7,11 +9,15 @@ const {
 describe('fund-history-provider helpers', () => {
   test('splits long ranges into TEFAS-sized chunks', () => {
     expect(
-      buildDateChunks('2026-01-01', '2026-04-10', 90)
+      buildDateChunks('2026-01-01', '2026-04-10')
     ).toEqual([
       { start: '01.01.2026', end: '10.01.2026' },
-      { start: '11.01.2026', end: '10.04.2026' },
+      { start: '11.01.2026', end: '09.02.2026' },
+      { start: '10.02.2026', end: '11.03.2026' },
+      { start: '12.03.2026', end: '10.04.2026' },
     ]);
+    expect(TEFAS_MAX_RANGE_DAYS).toBe(30);
+    expect(FULL_HISTORY_LOOKBACK_DAYS).toBe(1825);
   });
 
   test('maps TEFAS history rows into historical_data upserts', () => {
@@ -62,6 +68,18 @@ describe('fund-history-provider helpers', () => {
 
     expect(rows).toEqual([
       expect.objectContaining({ date: '2026-03-01', price: 12.34 }),
+    ]);
+  });
+
+  test('builds bulk upserts using each TEFAS row fund code', () => {
+    const rows = buildHistoricalUpsertRows('', [
+      { FONKODU: 'AAA', TARIH: '2026-03-02', FIYAT: 12.34 },
+      { FONKODU: 'BBB', TARIH: '2026-03-02', FIYAT: 45.67 },
+    ]);
+
+    expect(rows).toEqual([
+      expect.objectContaining({ fund_code: 'AAA', date: '2026-03-02', price: 12.34 }),
+      expect.objectContaining({ fund_code: 'BBB', date: '2026-03-02', price: 45.67 }),
     ]);
   });
 
