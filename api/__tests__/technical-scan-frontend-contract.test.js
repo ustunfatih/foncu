@@ -11,6 +11,15 @@ test('frontend API sends canonical rsiThreshold query param', () => {
   expect(apiSource).not.toContain("url.searchParams.append('rsiBelow'");
 });
 
+test('browser API requests stay on the active deployment origin', () => {
+  const apiSource = fs.readFileSync(FRONTEND_API, 'utf8');
+  const browserOriginCheck = apiSource.indexOf("if (typeof window !== 'undefined') return window.location.origin");
+  const environmentOverrideCheck = apiSource.indexOf('if (trimmed) return trimmed');
+
+  expect(browserOriginCheck).toBeGreaterThan(-1);
+  expect(environmentOverrideCheck).toBeGreaterThan(browserOriginCheck);
+});
+
 test('technical scan type and scanner page use canonical field names', () => {
   const typesSource = fs.readFileSync(FRONTEND_TYPES, 'utf8');
   const pageSource = fs.readFileSync(SCANNER_PAGE, 'utf8');
