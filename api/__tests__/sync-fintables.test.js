@@ -53,6 +53,7 @@ beforeEach(() => {
   syncFundProfiles.mockResolvedValue({
     profiles: [{ fon_kodu: 'AAA' }],
     profileCount: 1,
+    historySnapshotCount: 1,
   });
   syncFundAllocations.mockResolvedValue({ allocationCount: 1 });
   syncFundMetrics.mockResolvedValue({
@@ -89,6 +90,7 @@ test('runs the full sync and returns summary details', async () => {
   expect(syncFundHoldings).not.toHaveBeenCalled();
   expect(syncKapEvents).toHaveBeenCalled();
   expect(res.payload.summary.coverage.fundsWithYtd).toBe(1);
+  expect(res.payload.summary.historySnapshotCount).toBe(1);
   expect(res.payload.log).toContain('Monthly holdings sync is handled outside Vercel by the KAP workflow.');
   expect(res.payload.summary.skippedModules).toEqual(
     expect.arrayContaining([

@@ -1,5 +1,12 @@
 const supabase = require('../supabase');
-const { bootstrapSession, fetchInfo, fetchAllocation, fetchAnalyzeData, formatDate } = require('../tefas');
+const {
+  bootstrapSession,
+  fetchInfo,
+  fetchAllocation,
+  fetchAnalyzeData,
+  formatDate,
+  toISO,
+} = require('../tefas');
 const { upsertRows } = require('../sync-helpers');
 
 const FUND_KIND_MAP = {
@@ -83,17 +90,39 @@ async function loadExistingProfiles() {
   return new Map((data || []).map((row) => [row.fon_kodu, row]));
 }
 
-async function fetchLatestSnapshotRows(fetcher, kind, cookie, log, label) {
+function getLatestCompletedBusinessDate(now = new Date()) {
+  const date = new Date(now);
+  date.setUTCHours(0, 0, 0, 0);
+
+  // TEFAS allocation reports settle later than NAV prices. Before 18:00 UTC,
+  // treat the prior business day as the latest complete reporting date.
+  if (now.getUTCHours() < 18) {
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
+  while (date.getUTCDay() === 0 || date.getUTCDay() === 6) {
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
+  return date;
+}
+
+async function fetchLatestSnapshotRows(fetcher, kind, cookie, log, label, options = {}) {
+  const baseDate = options.baseDate ? new Date(options.baseDate) : new Date();
   for (let daysBack = 0; daysBack < 7; daysBack += 1) {
-    const asOf = new Date();
+    const asOf = new Date(baseDate);
     asOf.setUTCDate(asOf.getUTCDate() - daysBack);
     const date = formatDate(asOf);
-    const rows = await fetcher({
-      start: date,
-      end: date,
-      kind,
-      cookie,
-    });
+    let rows;
+    try {
+      rows = await fetcher({
+        start: date,
+        end: date,
+        kind,
+        cookie,
+      });
+    } catch (error) {
+      log.push(`TEFAS ${label} snapshot unavailable for ${kind} on ${date}; trying earlier date.`);
+      continue;
+    }
 
     if (Array.isArray(rows) && rows.length > 0) {
       log.push(`Using TEFAS ${label} snapshot for ${kind} from ${date}`);
@@ -132,6 +161,19 @@ function buildProfileRow(row, kind, existingByCode, refreshedAt) {
   };
 }
 
+function buildSnapshotHistoryRow(row) {
+  const code = row?.FONKODU?.toUpperCase();
+  if (!code || !row.TARIH || row.FIYAT == null) return null;
+
+  return {
+    fund_code: code,
+    date: toISO(row.TARIH),
+    price: normalizeNumber(row.FIYAT),
+    market_cap: normalizeNumber(row.PORTFOYBUYUKLUK),
+    investor_count: normalizeNumber(row.KISISAYISI),
+  };
+}
+
 function buildAllocationItems(row) {
   const items = Object.entries(row)
     .filter(([key, value]) => !['TARIH', 'FONKODU', 'FONUNVAN', 'BilFiyat'].includes(key) && value != null)
@@ -144,6 +186,20 @@ function buildAllocationItems(row) {
     .sort((a, b) => b.agirlik - a.agirlik);
 
   return items;
+}
+
+function buildAllocationUpdateRow(row, refreshedAt = new Date().toISOString()) {
+  const code = row?.FONKODU?.toUpperCase();
+  if (!code) return null;
+
+  return {
+    fon_kodu: code,
+    // Allocation snapshots can contain a newly listed fund that is not present in
+    // the general-information snapshot yet. Keep the upsert valid in that case.
+    unvan: row.FONUNVAN || code,
+    varlik_dagilimi: buildAllocationItems(row),
+    guncelleme_zamani: refreshedAt,
+  };
 }
 
 async function syncFundProfiles(log) {
@@ -159,6 +215,8 @@ async function syncFundProfiles(log) {
   );
 
   const profiles = [];
+  const historyRows = [];
+  const legacyFundRows = [];
   const tefasMutualCodes = new Set();
   for (let index = 0; index < kinds.length; index += 1) {
     const kind = kinds[index];
@@ -169,6 +227,17 @@ async function syncFundProfiles(log) {
         tefasMutualCodes.add(row.FONKODU.toUpperCase());
       }
       profiles.push(buildProfileRow(row, kind, existingByCode, refreshedAt));
+      const historyRow = buildSnapshotHistoryRow(row);
+      if (historyRow) {
+        historyRows.push(historyRow);
+        legacyFundRows.push({
+          code: historyRow.fund_code,
+          title: row.FONUNVAN || historyRow.fund_code,
+          kind,
+          latest_date: historyRow.date,
+          updated_at: refreshedAt,
+        });
+      }
     }
   }
 
@@ -177,6 +246,19 @@ async function syncFundProfiles(log) {
   );
 
   const { count } = await upsertRows('fund_profiles', dedupedProfiles, 'fon_kodu');
+
+  const dedupedLegacyFunds = Array.from(
+    legacyFundRows.reduce((map, row) => map.set(row.code, row), new Map()).values()
+  );
+  const dedupedHistoryRows = Array.from(
+    historyRows.reduce((map, row) => map.set(`${row.fund_code}:${row.date}`, row), new Map()).values()
+  );
+  await upsertRows('funds', dedupedLegacyFunds, 'code');
+  const { count: historySnapshotCount } = await upsertRows(
+    'historical_data',
+    dedupedHistoryRows,
+    'fund_code,date'
+  );
 
   const inactiveMutualCodes = Array.from(existingByCode.values())
     .filter((row) => row.fon_tipi === 'mutual' && row.fon_kodu && !tefasMutualCodes.has(row.fon_kodu))
@@ -201,10 +283,12 @@ async function syncFundProfiles(log) {
     log.push(`Marked ${inactiveMutualCodes.length} mutual funds as TEFAS-inactive`);
   }
   log.push(`Upserted ${count} fund profiles from public TEFAS`);
+  log.push(`Upserted ${historySnapshotCount} current NAV history rows from public TEFAS`);
 
   return {
     profiles: dedupedProfiles,
     profileCount: count,
+    historySnapshotCount: historySnapshotCount ?? dedupedHistoryRows.length,
   };
 }
 
@@ -213,19 +297,23 @@ async function syncFundAllocations(log) {
 
   const cookie = await bootstrapSession();
   const kinds = Object.keys(FUND_KIND_MAP);
+  const latestCompletedBusinessDate = getLatestCompletedBusinessDate();
   const snapshots = await Promise.all(
-    kinds.map((kind) => fetchLatestSnapshotRows(fetchAllocation, kind, cookie, log, 'allocation'))
+    kinds.map((kind) => fetchLatestSnapshotRows(
+      fetchAllocation,
+      kind,
+      cookie,
+      log,
+      'allocation',
+      { baseDate: latestCompletedBusinessDate }
+    ))
   );
 
   const updates = [];
   for (const snapshot of snapshots) {
     for (const row of snapshot.rows) {
-      if (!row?.FONKODU) continue;
-      updates.push({
-        fon_kodu: row.FONKODU.toUpperCase(),
-        varlik_dagilimi: buildAllocationItems(row),
-        guncelleme_zamani: new Date().toISOString(),
-      });
+      const update = buildAllocationUpdateRow(row);
+      if (update) updates.push(update);
     }
   }
 
@@ -284,6 +372,11 @@ async function enrichFundProfileFromPublicTefas(code, existingProfile = null) {
 }
 
 module.exports = {
+  buildAllocationItems,
+  buildAllocationUpdateRow,
+  buildSnapshotHistoryRow,
+  fetchLatestSnapshotRows,
+  getLatestCompletedBusinessDate,
   enrichFundProfileFromPublicTefas,
   syncFundAllocations,
   syncFundProfiles,

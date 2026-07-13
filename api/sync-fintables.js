@@ -56,6 +56,7 @@ module.exports = async (req, res) => {
         const summary = {
           phase,
           profileCount: 0,
+          historySnapshotCount: 0,
           allocationCount: 0,
           metricCount: 0,
           holdingCount: 0,
@@ -108,6 +109,7 @@ module.exports = async (req, res) => {
     const summary = {
       phase,
       profileCount: 0,
+      historySnapshotCount: 0,
       allocationCount: 0,
       metricCount: 0,
       holdingCount: 0,
@@ -142,6 +144,7 @@ module.exports = async (req, res) => {
       const profileResult = await syncFundProfiles(log);
       profiles = profileResult.profiles;
       summary.profileCount = profileResult.profileCount;
+      summary.historySnapshotCount = profileResult.historySnapshotCount ?? 0;
     }
 
     if (shouldRunProfiles) {
