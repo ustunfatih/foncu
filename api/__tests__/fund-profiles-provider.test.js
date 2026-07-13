@@ -1,6 +1,7 @@
 const {
   buildAllocationItems,
   buildAllocationUpdateRow,
+  buildSnapshotHistoryRow,
 } = require('../_lib/providers/fund-profiles-provider');
 
 describe('fund-profiles-provider allocation helpers', () => {
@@ -37,5 +38,21 @@ describe('fund-profiles-provider allocation helpers', () => {
   test('falls back to the code when TEFAS omits a title', () => {
     expect(buildAllocationUpdateRow({ FONKODU: 'ABC' }, '2026-07-13T10:00:00.000Z'))
       .toMatchObject({ fon_kodu: 'ABC', unvan: 'ABC' });
+  });
+
+  test('builds a current historical_data row from the nightly snapshot', () => {
+    expect(buildSnapshotHistoryRow({
+      FONKODU: 'ak3',
+      TARIH: String(Date.parse('2026-07-13T00:00:00Z')),
+      FIYAT: 50.88,
+      PORTFOYBUYUKLUK: 7175276093,
+      KISISAYISI: 20909,
+    })).toEqual({
+      fund_code: 'AK3',
+      date: '2026-07-13',
+      price: 50.88,
+      market_cap: 7175276093,
+      investor_count: 20909,
+    });
   });
 });

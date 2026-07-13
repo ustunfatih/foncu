@@ -1,5 +1,12 @@
 const supabase = require('../supabase');
-const { bootstrapSession, fetchInfo, fetchAllocation, fetchAnalyzeData, formatDate } = require('../tefas');
+const {
+  bootstrapSession,
+  fetchInfo,
+  fetchAllocation,
+  fetchAnalyzeData,
+  formatDate,
+  toISO,
+} = require('../tefas');
 const { upsertRows } = require('../sync-helpers');
 
 const FUND_KIND_MAP = {
@@ -132,6 +139,19 @@ function buildProfileRow(row, kind, existingByCode, refreshedAt) {
   };
 }
 
+function buildSnapshotHistoryRow(row) {
+  const code = row?.FONKODU?.toUpperCase();
+  if (!code || !row.TARIH || row.FIYAT == null) return null;
+
+  return {
+    fund_code: code,
+    date: toISO(row.TARIH),
+    price: normalizeNumber(row.FIYAT),
+    market_cap: normalizeNumber(row.PORTFOYBUYUKLUK),
+    investor_count: normalizeNumber(row.KISISAYISI),
+  };
+}
+
 function buildAllocationItems(row) {
   const items = Object.entries(row)
     .filter(([key, value]) => !['TARIH', 'FONKODU', 'FONUNVAN', 'BilFiyat'].includes(key) && value != null)
@@ -173,6 +193,8 @@ async function syncFundProfiles(log) {
   );
 
   const profiles = [];
+  const historyRows = [];
+  const legacyFundRows = [];
   const tefasMutualCodes = new Set();
   for (let index = 0; index < kinds.length; index += 1) {
     const kind = kinds[index];
@@ -183,6 +205,17 @@ async function syncFundProfiles(log) {
         tefasMutualCodes.add(row.FONKODU.toUpperCase());
       }
       profiles.push(buildProfileRow(row, kind, existingByCode, refreshedAt));
+      const historyRow = buildSnapshotHistoryRow(row);
+      if (historyRow) {
+        historyRows.push(historyRow);
+        legacyFundRows.push({
+          code: historyRow.fund_code,
+          title: row.FONUNVAN || historyRow.fund_code,
+          kind,
+          latest_date: historyRow.date,
+          updated_at: refreshedAt,
+        });
+      }
     }
   }
 
@@ -191,6 +224,19 @@ async function syncFundProfiles(log) {
   );
 
   const { count } = await upsertRows('fund_profiles', dedupedProfiles, 'fon_kodu');
+
+  const dedupedLegacyFunds = Array.from(
+    legacyFundRows.reduce((map, row) => map.set(row.code, row), new Map()).values()
+  );
+  const dedupedHistoryRows = Array.from(
+    historyRows.reduce((map, row) => map.set(`${row.fund_code}:${row.date}`, row), new Map()).values()
+  );
+  await upsertRows('funds', dedupedLegacyFunds, 'code');
+  const { count: historySnapshotCount } = await upsertRows(
+    'historical_data',
+    dedupedHistoryRows,
+    'fund_code,date'
+  );
 
   const inactiveMutualCodes = Array.from(existingByCode.values())
     .filter((row) => row.fon_tipi === 'mutual' && row.fon_kodu && !tefasMutualCodes.has(row.fon_kodu))
@@ -215,10 +261,12 @@ async function syncFundProfiles(log) {
     log.push(`Marked ${inactiveMutualCodes.length} mutual funds as TEFAS-inactive`);
   }
   log.push(`Upserted ${count} fund profiles from public TEFAS`);
+  log.push(`Upserted ${historySnapshotCount} current NAV history rows from public TEFAS`);
 
   return {
     profiles: dedupedProfiles,
     profileCount: count,
+    historySnapshotCount: historySnapshotCount ?? dedupedHistoryRows.length,
   };
 }
 
@@ -296,6 +344,7 @@ async function enrichFundProfileFromPublicTefas(code, existingProfile = null) {
 module.exports = {
   buildAllocationItems,
   buildAllocationUpdateRow,
+  buildSnapshotHistoryRow,
   enrichFundProfileFromPublicTefas,
   syncFundAllocations,
   syncFundProfiles,
