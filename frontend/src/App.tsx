@@ -16,6 +16,7 @@ import {
   formatVolatility,
   formatMaxDrawdown
 } from './utils/analytics';
+import { sanitizeHistoricalSeries } from './utils/history';
 
 const ExportPage = lazy(() => import('./pages/ExportPage'));
 const FundScreenerPage = lazy(() => import('./pages/FundScreenerPage'));
@@ -317,7 +318,7 @@ const App = () => {
 
   const fundAnalytics = useMemo(() => {
     return selectedFunds.map((fund) => {
-      const history = fund.priceHistory || [];
+      const history = sanitizeHistoricalSeries(fund.priceHistory);
       return {
         code: fund.code,
         sharpe: calculateSharpeRatio(history),
@@ -350,7 +351,9 @@ const App = () => {
     };
 
     selectedFunds.forEach(fund => {
-      const history = fund[activeMetric.key as keyof FundOverview] as HistoricalPoint[];
+      const history = sanitizeHistoricalSeries(
+        fund[activeMetric.key as keyof FundOverview] as HistoricalPoint[]
+      );
       if (!history || history.length === 0) return;
 
       // Calculate MAs on FULL history data (not sliced)

@@ -52,6 +52,19 @@ describe('fund-history-provider helpers', () => {
     ]);
   });
 
+  test('skips holiday rows that do not contain a positive price', () => {
+    const rows = buildHistoricalUpsertRows('AAA', [
+      { TARIH: new Date('2026-03-01T00:00:00Z').getTime().toString(), FIYAT: '12.34' },
+      { TARIH: new Date('2026-03-02T00:00:00Z').getTime().toString(), FIYAT: null },
+      { TARIH: new Date('2026-03-03T00:00:00Z').getTime().toString(), FIYAT: 0 },
+      { TARIH: new Date('2026-03-04T00:00:00Z').getTime().toString(), FIYAT: 'invalid' },
+    ]);
+
+    expect(rows).toEqual([
+      expect.objectContaining({ date: '2026-03-01', price: 12.34 }),
+    ]);
+  });
+
   test('detects when long-horizon returns still need a backfill', () => {
     expect(
       requiresLongHorizonBackfill({

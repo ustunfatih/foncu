@@ -74,3 +74,23 @@ test('fetchFundHistoryBatch paginates and groups results by fund code', async ()
     { date: '2026-02-01', value: 2001 },
   ]);
 });
+
+test('omits unavailable prices instead of converting them to zero-value observations', async () => {
+  fromMock.mockReturnValue(createPagedQuery({
+    '0:999': {
+      data: [
+        { date: '2026-03-20', price: 12.5 },
+        { date: '2026-03-21', price: null },
+        { date: '2026-03-22', price: 0 },
+        { date: '2026-03-23', price: 'not-a-price' },
+        { date: '2026-03-24', price: 12.8 },
+      ],
+      error: null,
+    },
+  }));
+
+  await expect(fetchFundHistory('aaa', '2026-03-20', '2026-03-24')).resolves.toEqual([
+    { date: '2026-03-20', value: 12.5 },
+    { date: '2026-03-24', value: 12.8 },
+  ]);
+});

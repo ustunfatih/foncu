@@ -6,10 +6,11 @@ const { enforceRateLimit } = require('./_lib/rate-limit');
 const FIVE_YEARS_IN_DAYS = 365 * 5;
 const STALE_AFTER_MS = 36 * 60 * 60 * 1000;
 
-function toSeries(rows, field) {
+function toSeries(rows, field, { requirePositive = false } = {}) {
   return rows
     .filter((row) => row[field] !== null && row[field] !== undefined)
-    .map((row) => ({ date: row.date, value: Number(row[field]) || 0 }));
+    .map((row) => ({ date: row.date, value: Number(row[field]) }))
+    .filter((point) => Number.isFinite(point.value) && (!requirePositive || point.value > 0));
 }
 
 function toAllocation(value) {
@@ -73,6 +74,8 @@ module.exports = async function handler(req, res) {
 
     const profile = profileResult.data || null;
     const legacyFund = legacyFundResult.data || null;
+    const priceHistory = toSeries(rows, 'price', { requirePositive: true });
+    const latestPricePoint = priceHistory.at(-1);
     const latest = rows.at(-1);
     const refreshedAt = profile?.guncelleme_zamani || legacyFund?.updated_at || `${latest.date}T00:00:00.000Z`;
     const refreshedMs = new Date(refreshedAt).getTime();
@@ -84,12 +87,12 @@ module.exports = async function handler(req, res) {
         code,
         title: profile?.unvan || legacyFund?.title || code,
         kind,
-        priceHistory: toSeries(rows, 'price'),
+        priceHistory,
         marketCapHistory: toSeries(rows, 'market_cap'),
         investorHistory: toSeries(rows, 'investor_count'),
         allocation: toAllocation(profile?.varlik_dagilimi),
-        latestPrice: Number(latest.price) || 0,
-        latestDate: latest.date,
+        latestPrice: latestPricePoint?.value ?? 0,
+        latestDate: latestPricePoint?.date ?? latest.date,
       },
       meta: {
         source: 'supabase',

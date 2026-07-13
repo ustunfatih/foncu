@@ -4,6 +4,7 @@ import { FundKind, FundOverview, FundSummary, HistoricalPoint } from '../types';
 import PerformanceChart from '../components/PerformanceChart';
 import ErrorState from '../components/ErrorState';
 import { ChartSkeleton } from '../components/LoadingSkeleton';
+import { sanitizeHistoricalSeries } from '../utils/history';
 
 const BenchmarkPage = () => {
   const [funds, setFunds] = useState<FundSummary[]>([]);
@@ -125,8 +126,11 @@ const BenchmarkPage = () => {
     const map: Record<string, Record<string, number>> = {};
 
     const normalize = (series: HistoricalPoint[]) => {
-      const first = series[0]?.value || 1;
-      return series.map((point) => ({
+      const validSeries = sanitizeHistoricalSeries(series);
+      const first = validSeries[0]?.value;
+      if (first === undefined) return [];
+
+      return validSeries.map((point) => ({
         date: point.date,
         value: ((point.value - first) / first) * 100,
       }));
