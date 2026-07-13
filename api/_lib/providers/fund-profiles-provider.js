@@ -146,6 +146,20 @@ function buildAllocationItems(row) {
   return items;
 }
 
+function buildAllocationUpdateRow(row, refreshedAt = new Date().toISOString()) {
+  const code = row?.FONKODU?.toUpperCase();
+  if (!code) return null;
+
+  return {
+    fon_kodu: code,
+    // Allocation snapshots can contain a newly listed fund that is not present in
+    // the general-information snapshot yet. Keep the upsert valid in that case.
+    unvan: row.FONUNVAN || code,
+    varlik_dagilimi: buildAllocationItems(row),
+    guncelleme_zamani: refreshedAt,
+  };
+}
+
 async function syncFundProfiles(log) {
   log.push('Fetching fund profiles from public TEFAS snapshots...');
 
@@ -220,12 +234,8 @@ async function syncFundAllocations(log) {
   const updates = [];
   for (const snapshot of snapshots) {
     for (const row of snapshot.rows) {
-      if (!row?.FONKODU) continue;
-      updates.push({
-        fon_kodu: row.FONKODU.toUpperCase(),
-        varlik_dagilimi: buildAllocationItems(row),
-        guncelleme_zamani: new Date().toISOString(),
-      });
+      const update = buildAllocationUpdateRow(row);
+      if (update) updates.push(update);
     }
   }
 
@@ -284,6 +294,8 @@ async function enrichFundProfileFromPublicTefas(code, existingProfile = null) {
 }
 
 module.exports = {
+  buildAllocationItems,
+  buildAllocationUpdateRow,
   enrichFundProfileFromPublicTefas,
   syncFundAllocations,
   syncFundProfiles,
