@@ -1,9 +1,20 @@
 const {
   buildBusinessDates,
   defaultStartDate,
+  filterToKnownFunds,
   findLargestGapDays,
   parseArgs,
 } = require('../../scripts/backfill-tefas-history');
+
+test('rows for delisted fund codes are dropped to satisfy the funds FK', () => {
+  const dropped = new Set();
+  const rows = [
+    { fund_code: 'AAL', date: '2021-08-02', price: 1 },
+    { fund_code: 'DEAD', date: '2021-08-02', price: 2 },
+  ];
+  expect(filterToKnownFunds(rows, new Set(['AAL']), dropped)).toEqual([rows[0]]);
+  expect([...dropped]).toEqual(['DEAD']);
+});
 
 test('defaults to the full five-year history window', () => {
   expect(defaultStartDate('2026-07-13')).toBe('2021-07-14');
