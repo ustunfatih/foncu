@@ -156,6 +156,16 @@ python scripts/sync_kap_holdings.py
 
 Use the GitHub Actions workflow that runs `scripts/sync_kap_holdings.py` for production holdings refreshes.
 
+### Five-year price history
+
+Use the **TEFAS Historical Data Backfill** GitHub Actions workflow to populate or repair
+`historical_data`. With no inputs it safely upserts all available YAT, EMK, and BYF observations
+for the previous five years, then verifies representative fund coverage. Focused retries can set a
+fund code, kind, and narrower date range. TEFAS history requests are limited to one month, so the
+backfill uses 30-day chunks for focused funds and one business day at a time for bulk runs.
+The workflow also repairs the trailing 45 days every Sunday so a failed daily snapshot does not
+leave a permanent hole in the charts.
+
 ## 🎯 Usage
 
 1. **Select Fund Type**: Choose between YAT, EMK, or BYF
