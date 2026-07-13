@@ -165,10 +165,13 @@ function buildSnapshotHistoryRow(row) {
   const code = row?.FONKODU?.toUpperCase();
   if (!code || !row.TARIH || row.FIYAT == null) return null;
 
+  const price = normalizeNumber(row.FIYAT);
+  if (price === null || price <= 0) return null;
+
   return {
     fund_code: code,
     date: toISO(row.TARIH),
-    price: normalizeNumber(row.FIYAT),
+    price,
     market_cap: normalizeNumber(row.PORTFOYBUYUKLUK),
     investor_count: normalizeNumber(row.KISISAYISI),
   };

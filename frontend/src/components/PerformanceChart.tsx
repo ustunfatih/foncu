@@ -19,6 +19,13 @@ const maColors = {
 const CustomTooltip = ({ active, payload, label, isNormalized, metricLabel }: any) => {
   if (!active || !payload || !payload.length) return null;
 
+  // The chart uses an Area and a Line for each fund. Recharts can include both
+  // graphical layers in the tooltip payload, so keep only one entry per series.
+  const uniqueEntries = payload.filter((entry: any, index: number, entries: any[]) => (
+    !entry.dataKey?.includes('_MA')
+    && entries.findIndex((candidate: any) => candidate.dataKey === entry.dataKey) === index
+  ));
+
   // Format date from YYYY-MM-DD to DD-MMM-YY
   const formatDate = (dateStr: string) => {
     try {
@@ -50,15 +57,14 @@ const CustomTooltip = ({ active, payload, label, isNormalized, metricLabel }: an
       }}>
         {metricLabel} - {formatDate(label)}
       </p>
-      {payload.map((entry: any, index: number) => {
-        if (entry.dataKey?.includes('_MA')) return null;
+      {uniqueEntries.map((entry: any) => {
         const value = entry.value;
         const displayValue = isNormalized 
           ? `${value > 0 ? '+' : ''}${value.toFixed(2)}%`
           : formatTry6(value);
         
         return (
-          <div key={index} style={{
+          <div key={entry.dataKey} style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
@@ -145,8 +151,10 @@ const PerformanceChart = memo(({ data, metricLabel, selectedCodes, isNormalized,
                 key={`area-${code}`}
                 type="monotone"
                 dataKey={code}
+                tooltipType="none"
                 stroke="transparent"
                 fill={`url(#gradient-${code})`}
+                connectNulls
                 animationDuration={1000}
                 animationEasing="ease-out"
               />
@@ -160,6 +168,7 @@ const PerformanceChart = memo(({ data, metricLabel, selectedCodes, isNormalized,
                 stroke={colors[index % colors.length]}
                 strokeWidth={2.5}
                 dot={false}
+                connectNulls
                 activeDot={{ r: 6, fill: colors[index % colors.length], stroke: 'var(--color-bg-card)', strokeWidth: 2 }}
                 animationDuration={1000}
                 animationEasing="ease-out"

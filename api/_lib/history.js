@@ -3,6 +3,12 @@ const supabase = require('./supabase');
 const normalizeCode = (code) => (code || '').toString().trim().toUpperCase();
 const HISTORY_PAGE_SIZE = 1000;
 
+const toPricePoint = (row) => {
+  const value = Number(row?.price);
+  if (!row?.date || !Number.isFinite(value) || value <= 0) return null;
+  return { date: row.date, value };
+};
+
 async function fetchPagedRows(buildQuery, options = {}) {
   const pageSize = options.pageSize || HISTORY_PAGE_SIZE;
   const rows = [];
@@ -41,10 +47,7 @@ const fetchFundHistory = async (code, startDate, endDate) => {
       .order('date', { ascending: true })
   ));
 
-  return (data || []).map((row) => ({
-    date: row.date,
-    value: Number(row.price) || 0,
-  }));
+  return (data || []).map(toPricePoint).filter(Boolean);
 };
 
 const fetchFundHistoryBatch = async (codes, startDate, endDate) => {
@@ -65,12 +68,11 @@ const fetchFundHistoryBatch = async (codes, startDate, endDate) => {
 
   const grouped = {};
   for (const row of data || []) {
+    const point = toPricePoint(row);
+    if (!point) continue;
     const code = row.fund_code;
     if (!grouped[code]) grouped[code] = [];
-    grouped[code].push({
-      date: row.date,
-      value: Number(row.price) || 0,
-    });
+    grouped[code].push(point);
   }
 
   return grouped;
@@ -96,10 +98,7 @@ const fetchLatestPrice = async (code) => {
   }
 
   if (!data) return null;
-  return {
-    date: data.date,
-    value: Number(data.price) || 0,
-  };
+  return toPricePoint(data);
 };
 
 const fetchLatestPriceBatch = async (codes) => {
@@ -124,12 +123,11 @@ const fetchLatestPriceBatch = async (codes) => {
 
   const latestPrices = {};
   for (const row of data || []) {
+    const point = toPricePoint(row);
+    if (!point) continue;
     // Since rows are ordered by date DESC, the first occurrence of a fund_code is the latest
     if (!latestPrices[row.fund_code]) {
-      latestPrices[row.fund_code] = {
-        date: row.date,
-        value: Number(row.price) || 0,
-      };
+      latestPrices[row.fund_code] = point;
     }
   }
 

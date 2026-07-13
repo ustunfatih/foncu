@@ -67,11 +67,14 @@ function buildHistoricalUpsertRows(code, tefasRows) {
   for (const row of tefasRows || []) {
     if (!row?.TARIH || row.FIYAT == null) continue;
 
+    const price = Number(row.FIYAT);
+    if (!Number.isFinite(price) || price <= 0) continue;
+
     const date = toISO(row.TARIH);
     rowsByDate.set(date, {
       fund_code: code,
       date,
-      price: Number(row.FIYAT) || 0,
+      price,
       market_cap: row.PORTFOYBUYUKLUK != null ? Number(row.PORTFOYBUYUKLUK) || 0 : 0,
       investor_count: row.KISISAYISI != null ? Number(row.KISISAYISI) || 0 : 0,
     });

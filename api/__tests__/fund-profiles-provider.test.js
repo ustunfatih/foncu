@@ -58,6 +58,14 @@ describe('fund-profiles-provider allocation helpers', () => {
     });
   });
 
+  test('does not persist a snapshot when its price is unavailable', () => {
+    expect(buildSnapshotHistoryRow({
+      FONKODU: 'ak3',
+      TARIH: String(Date.parse('2026-07-13T00:00:00Z')),
+      FIYAT: 0,
+    })).toBeNull();
+  });
+
   test('uses the latest completed business day for allocation reports', () => {
     expect(getLatestCompletedBusinessDate(new Date('2026-07-13T10:00:00Z')).toISOString())
       .toBe('2026-07-10T00:00:00.000Z');
