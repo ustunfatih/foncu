@@ -766,6 +766,7 @@ def persist_batch(
     mapping_rows = [
         {
             "fon_kodu": result["fund_code"],
+            "unvan": result.get("unvan") or result["fund_code"],
             "kap_link": result["kap_link"],
             "kap_fund_id": result["kap_fund_id"],
             "guncelleme_zamani": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -796,6 +797,7 @@ def persist_batch(
 
 def sync_single_fund(profile: dict[str, Any], target_year: int, target_month: int, days: int) -> dict[str, Any]:
     code = profile["fon_kodu"].upper()
+    unvan = profile.get("unvan") or code
     kap_link = profile.get("kap_link")
     kap_fund_id = profile.get("kap_fund_id")
 
@@ -822,11 +824,11 @@ def sync_single_fund(profile: dict[str, Any], target_year: int, target_month: in
     disclosures = get_disclosures(kap_fund_id, days)
     disclosure = choose_disclosure(disclosures, target_year, target_month)
     if not disclosure:
-        return {"fund_code": code, "status": "missing_period", "holdings": [], "kap_link": kap_link, "kap_fund_id": kap_fund_id}
+        return {"fund_code": code, "status": "missing_period", "holdings": [], "kap_link": kap_link, "kap_fund_id": kap_fund_id, "unvan": unvan}
 
     file_id = get_file_id(disclosure["disclosureIndex"])
     if not file_id:
-        return {"fund_code": code, "status": "missing_pdf", "holdings": [], "kap_link": kap_link, "kap_fund_id": kap_fund_id}
+        return {"fund_code": code, "status": "missing_pdf", "holdings": [], "kap_link": kap_link, "kap_fund_id": kap_fund_id, "unvan": unvan}
 
     pdf_bytes = download_pdf(file_id)
     parsed = parse_holdings(pdf_bytes)
@@ -838,6 +840,7 @@ def sync_single_fund(profile: dict[str, Any], target_year: int, target_month: in
         "holdings": holdings_rows,
         "kap_link": kap_link,
         "kap_fund_id": kap_fund_id,
+        "unvan": unvan,
         "parser": parsed.parser,
         "confidence": parsed.confidence,
         "row_count": len(parsed.holdings),
