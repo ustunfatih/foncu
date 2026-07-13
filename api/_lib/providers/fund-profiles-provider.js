@@ -90,17 +90,39 @@ async function loadExistingProfiles() {
   return new Map((data || []).map((row) => [row.fon_kodu, row]));
 }
 
-async function fetchLatestSnapshotRows(fetcher, kind, cookie, log, label) {
+function getLatestCompletedBusinessDate(now = new Date()) {
+  const date = new Date(now);
+  date.setUTCHours(0, 0, 0, 0);
+
+  // TEFAS allocation reports settle later than NAV prices. Before 18:00 UTC,
+  // treat the prior business day as the latest complete reporting date.
+  if (now.getUTCHours() < 18) {
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
+  while (date.getUTCDay() === 0 || date.getUTCDay() === 6) {
+    date.setUTCDate(date.getUTCDate() - 1);
+  }
+  return date;
+}
+
+async function fetchLatestSnapshotRows(fetcher, kind, cookie, log, label, options = {}) {
+  const baseDate = options.baseDate ? new Date(options.baseDate) : new Date();
   for (let daysBack = 0; daysBack < 7; daysBack += 1) {
-    const asOf = new Date();
+    const asOf = new Date(baseDate);
     asOf.setUTCDate(asOf.getUTCDate() - daysBack);
     const date = formatDate(asOf);
-    const rows = await fetcher({
-      start: date,
-      end: date,
-      kind,
-      cookie,
-    });
+    let rows;
+    try {
+      rows = await fetcher({
+        start: date,
+        end: date,
+        kind,
+        cookie,
+      });
+    } catch (error) {
+      log.push(`TEFAS ${label} snapshot unavailable for ${kind} on ${date}; trying earlier date.`);
+      continue;
+    }
 
     if (Array.isArray(rows) && rows.length > 0) {
       log.push(`Using TEFAS ${label} snapshot for ${kind} from ${date}`);
@@ -275,8 +297,16 @@ async function syncFundAllocations(log) {
 
   const cookie = await bootstrapSession();
   const kinds = Object.keys(FUND_KIND_MAP);
+  const latestCompletedBusinessDate = getLatestCompletedBusinessDate();
   const snapshots = await Promise.all(
-    kinds.map((kind) => fetchLatestSnapshotRows(fetchAllocation, kind, cookie, log, 'allocation'))
+    kinds.map((kind) => fetchLatestSnapshotRows(
+      fetchAllocation,
+      kind,
+      cookie,
+      log,
+      'allocation',
+      { baseDate: latestCompletedBusinessDate }
+    ))
   );
 
   const updates = [];
@@ -345,6 +375,8 @@ module.exports = {
   buildAllocationItems,
   buildAllocationUpdateRow,
   buildSnapshotHistoryRow,
+  fetchLatestSnapshotRows,
+  getLatestCompletedBusinessDate,
   enrichFundProfileFromPublicTefas,
   syncFundAllocations,
   syncFundProfiles,

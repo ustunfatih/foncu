@@ -2,6 +2,8 @@ const {
   buildAllocationItems,
   buildAllocationUpdateRow,
   buildSnapshotHistoryRow,
+  fetchLatestSnapshotRows,
+  getLatestCompletedBusinessDate,
 } = require('../_lib/providers/fund-profiles-provider');
 
 describe('fund-profiles-provider allocation helpers', () => {
@@ -54,5 +56,34 @@ describe('fund-profiles-provider allocation helpers', () => {
       market_cap: 7175276093,
       investor_count: 20909,
     });
+  });
+
+  test('uses the latest completed business day for allocation reports', () => {
+    expect(getLatestCompletedBusinessDate(new Date('2026-07-13T10:00:00Z')).toISOString())
+      .toBe('2026-07-10T00:00:00.000Z');
+    expect(getLatestCompletedBusinessDate(new Date('2026-07-13T23:00:00Z')).toISOString())
+      .toBe('2026-07-13T00:00:00.000Z');
+    expect(getLatestCompletedBusinessDate(new Date('2026-07-12T23:00:00Z')).toISOString())
+      .toBe('2026-07-10T00:00:00.000Z');
+  });
+
+  test('skips unavailable snapshot dates and falls back safely', async () => {
+    const fetcher = jest.fn()
+      .mockRejectedValueOnce(new Error('holiday'))
+      .mockResolvedValueOnce([{ FONKODU: 'AK3' }]);
+    const log = [];
+
+    const snapshot = await fetchLatestSnapshotRows(
+      fetcher,
+      'YAT',
+      '',
+      log,
+      'allocation',
+      { baseDate: new Date('2026-07-13T00:00:00Z') }
+    );
+
+    expect(snapshot.date).toBe('12.07.2026');
+    expect(snapshot.rows).toEqual([{ FONKODU: 'AK3' }]);
+    expect(log[0]).toContain('trying earlier date');
   });
 });
