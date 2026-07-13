@@ -84,6 +84,31 @@ function parseArgs(argv) {
   return { startDate, endDate, fundCode, kinds, cooldownMs, batchSize, maxGapDays, verifyCodes };
 }
 
+// historical_data.fund_code has an FK to funds.code; old TEFAS snapshots
+// contain delisted codes that would abort the whole upsert.
+async function loadKnownFundCodes() {
+  const codes = new Set();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('funds')
+      .select('code')
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`Failed to load fund codes: ${error.message}`);
+    for (const row of data || []) codes.add(row.code);
+    if ((data || []).length < pageSize) break;
+  }
+  return codes;
+}
+
+function filterToKnownFunds(rows, knownCodes, droppedCodes) {
+  return rows.filter((row) => {
+    if (knownCodes.has(row.fund_code)) return true;
+    droppedCodes.add(row.fund_code);
+    return false;
+  });
+}
+
 async function fetchWithRateLimitRetry(params, attempts = 6) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -110,7 +135,14 @@ async function upsertInBatches(rows, batchSize) {
   return upserted;
 }
 
-async function backfillFocusedFund(options, cookie) {
+async function backfillFocusedFund(options, cookie, knownCodes) {
+  if (!knownCodes.has(options.fundCode)) {
+    throw new Error(
+      `${options.fundCode} is not present in the funds table; run the nightly sync first so the FK on historical_data can be satisfied`
+    );
+  }
+
+  const droppedCodes = new Set();
   let requestCount = 0;
   let upsertedCount = 0;
   for (const chunk of buildDateChunks(options.startDate, options.endDate, TEFAS_MAX_RANGE_DAYS)) {
@@ -122,7 +154,7 @@ async function backfillFocusedFund(options, cookie) {
       cookie,
     });
     upsertedCount += await upsertInBatches(
-      buildHistoricalUpsertRows(options.fundCode, rows),
+      filterToKnownFunds(buildHistoricalUpsertRows(options.fundCode, rows), knownCodes, droppedCodes),
       options.batchSize
     );
     requestCount += 1;
@@ -132,15 +164,19 @@ async function backfillFocusedFund(options, cookie) {
   return { requestCount, upsertedCount };
 }
 
-async function backfillAllFunds(options, cookie) {
+async function backfillAllFunds(options, cookie, knownCodes) {
   const dates = buildBusinessDates(options.startDate, options.endDate);
+  const droppedCodes = new Set();
   let requestCount = 0;
   let upsertedCount = 0;
 
   for (const [dateIndex, date] of dates.entries()) {
     for (const kind of options.kinds) {
       const rows = await fetchWithRateLimitRetry({ start: date, end: date, code: '', kind, cookie });
-      upsertedCount += await upsertInBatches(buildHistoricalUpsertRows('', rows), options.batchSize);
+      upsertedCount += await upsertInBatches(
+        filterToKnownFunds(buildHistoricalUpsertRows('', rows), knownCodes, droppedCodes),
+        options.batchSize
+      );
       requestCount += 1;
       if (options.cooldownMs) await sleep(options.cooldownMs);
     }
@@ -148,12 +184,13 @@ async function backfillAllFunds(options, cookie) {
     if ((dateIndex + 1) % 10 === 0 || dateIndex === dates.length - 1) {
       console.log(
         `[history-backfill] ${dateIndex + 1}/${dates.length} business dates; `
-        + `${requestCount} TEFAS requests; ${upsertedCount} rows upserted`
+        + `${requestCount} TEFAS requests; ${upsertedCount} rows upserted; `
+        + `${droppedCodes.size} delisted codes skipped`
       );
     }
   }
 
-  return { requestCount, upsertedCount };
+  return { requestCount, upsertedCount, droppedCodeCount: droppedCodes.size };
 }
 
 async function fetchStoredHistory(code, startDate, endDate) {
@@ -212,9 +249,11 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   console.log(`[history-backfill] starting ${JSON.stringify({ ...options, verifyCodes: options.verifyCodes })}`);
   const cookie = await bootstrapSession();
+  const knownCodes = await loadKnownFundCodes();
+  console.log(`[history-backfill] loaded ${knownCodes.size} known fund codes for FK filtering`);
   const result = options.fundCode
-    ? await backfillFocusedFund(options, cookie)
-    : await backfillAllFunds(options, cookie);
+    ? await backfillFocusedFund(options, cookie, knownCodes)
+    : await backfillAllFunds(options, cookie, knownCodes);
   await verifyCoverage(options);
   console.log(`[history-backfill] complete ${JSON.stringify(result)}`);
 }
@@ -229,6 +268,7 @@ if (require.main === module) {
 module.exports = {
   buildBusinessDates,
   defaultStartDate,
+  filterToKnownFunds,
   findLargestGapDays,
   parseArgs,
 };
