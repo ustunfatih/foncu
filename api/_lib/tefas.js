@@ -145,6 +145,11 @@ const doPost = async (endpoint, data, cookie, normalizeRow = (row) => row, retri
       }
 
       if (json?.errorCode || json?.errorMessage) {
+        // TEFAS returns this server error instead of an empty resultList for
+        // dates with no data (public holidays, pre-listing dates).
+        if (/Index \d+ out of bounds for length 0/.test(json.errorMessage || '')) {
+          return [];
+        }
         throw new Error(`TEFAS API error: ${json.errorMessage || json.errorCode}`);
       }
 
