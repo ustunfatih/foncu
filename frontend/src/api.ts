@@ -19,9 +19,14 @@ const RAW_API_BASE = import.meta.env.VITE_API_BASE || '';
 const REQUEST_TIMEOUT_MS = 60000;
 
 const getApiBase = (): string => {
+  // The frontend and serverless API ship as one Vercel deployment. Browser
+  // requests must stay on that deployment so previews never call production
+  // (and so the same-origin CSP remains effective). VITE_API_BASE is retained
+  // only for non-browser tooling that has no window location.
+  if (typeof window !== 'undefined') return window.location.origin;
+
   const trimmed = RAW_API_BASE.trim().replace(/\/$/, '');
   if (trimmed) return trimmed;
-  if (typeof window !== 'undefined') return window.location.origin;
   throw new Error('API base URL is not configured');
 };
 
