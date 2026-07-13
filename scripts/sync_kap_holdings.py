@@ -11,6 +11,7 @@ functions.
 from __future__ import annotations
 
 import argparse
+import functools
 import io
 import json
 import logging
@@ -36,7 +37,7 @@ PORTFOLIO_REPORT_DISCLOSURE_TYPE = "8aca490d502e34b801502e380044002b"
 KAP_DISCLOSURE_FILTER_URL = "https://kap.org.tr/tr/api/disclosure/filter/FILTERYFBF"
 KAP_DISCLOSURE_PAGE_URL = "https://www.kap.org.tr/tr/Bildirim"
 KAP_FILE_DOWNLOAD_URL = "https://kap.org.tr/tr/api/file/download"
-TEFAS_ANALYZE_URL = "https://www.tefas.gov.tr/api/DB/GetAllFundAnalyzeData"
+KAP_FUND_DIRECTORY_URL = "https://kap.org.tr/tr/YatirimFonlari/YF"
 
 HTTP_CONNECT_TIMEOUT = 10
 HTTP_READ_TIMEOUT = 20
@@ -410,31 +411,27 @@ def load_tefas_tradable_codes() -> set[str]:
     return codes
 
 
-def fetch_tefas_detail(fund_code: str) -> dict[str, Any]:
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Referer": "https://www.tefas.gov.tr/FonAnaliz.aspx",
+@functools.lru_cache(maxsize=1)
+def load_kap_fund_directory() -> dict[str, str]:
+    """Map fund code -> KAP fund page URL from KAP's server-rendered directory.
+
+    Replaces the pre-2026 TEFAS analyze endpoint (removed upstream) that used
+    to supply KAP links for funds missing a cached kap_link.
+    """
+    try:
+        html = request_with_backoff(
+            "get",
+            KAP_FUND_DIRECTORY_URL,
+            timeout=(HTTP_CONNECT_TIMEOUT, PDF_READ_TIMEOUT),
+        ).text
+    except requests.RequestException as exc:
+        logger.warning(f"[warn] KAP fund directory unavailable; relying on cached KAP links only: {exc}")
+        return {}
+
+    return {
+        code.upper(): f"https://kap.org.tr/tr/fon-bilgileri/ozet/{code}-{slug}"
+        for code, slug in re.findall(r"/tr/fon-bilgileri/ozet/([a-z0-9]+)-([a-z0-9-]+)", html)
     }
-
-    last_error: Exception | None = None
-    for attempt in range(3):
-        try:
-            response = request_with_backoff(
-                "post",
-                TEFAS_ANALYZE_URL,
-                data={"dil": "TR", "fonkod": fund_code.upper()},
-                headers=headers,
-                timeout=(HTTP_CONNECT_TIMEOUT, HTTP_READ_TIMEOUT),
-                verify=False,
-            )
-            return response.json()
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            time.sleep((attempt + 1) * 1.5)
-
-    raise SyncError(f"Failed to fetch TEFAS detail for {fund_code}: {last_error}")
 
 
 def extract_obj_id_from_kap_page(kap_link: str) -> str | None:
@@ -544,6 +541,13 @@ def parse_compact_stock_section(lines: list[str], parser_name: str) -> ParseResu
             continue
 
         if upper.startswith("TOPLAM"):
+            in_stock_section = False
+            continue
+
+        # Prefix match only: repeated page headers contain marker words
+        # (e.g. "... ALIŞ REPO TEMİNAT ...") and must not close a section
+        # that continues on the next page.
+        if any(upper.startswith(marker) for marker in SECTION_END_MARKERS):
             in_stock_section = False
             continue
 
@@ -795,18 +799,25 @@ def sync_single_fund(profile: dict[str, Any], target_year: int, target_month: in
     kap_link = profile.get("kap_link")
     kap_fund_id = profile.get("kap_fund_id")
 
-    if not kap_link:
-        detail = fetch_tefas_detail(code)
-        kap_link = (((detail or {}).get("fundProfile") or [{}])[0] or {}).get("KAPLINK")
-
-    if not kap_link:
-        return {"fund_code": code, "status": "missing_kap_link", "holdings": [], "kap_link": None, "kap_fund_id": None}
-
     if not kap_fund_id:
-        kap_fund_id = extract_obj_id_from_kap_page(kap_link)
+        # Cached link first (may predate the 2026 KAP redesign and be dead),
+        # then the fund's page from KAP's own directory.
+        candidates = [link for link in (kap_link, load_kap_fund_directory().get(code)) if link]
+        if not candidates:
+            return {"fund_code": code, "status": "missing_kap_link", "holdings": [], "kap_link": None, "kap_fund_id": None}
 
-    if not kap_fund_id:
-        return {"fund_code": code, "status": "missing_kap_fund_id", "holdings": [], "kap_link": kap_link, "kap_fund_id": None}
+        kap_link = None
+        for candidate in dict.fromkeys(candidates):
+            try:
+                kap_fund_id = extract_obj_id_from_kap_page(candidate)
+            except requests.RequestException:
+                kap_fund_id = None
+            if kap_fund_id:
+                kap_link = candidate
+                break
+
+        if not kap_fund_id:
+            return {"fund_code": code, "status": "missing_kap_fund_id", "holdings": [], "kap_link": candidates[0], "kap_fund_id": None}
 
     disclosures = get_disclosures(kap_fund_id, days)
     disclosure = choose_disclosure(disclosures, target_year, target_month)
