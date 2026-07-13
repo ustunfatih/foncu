@@ -106,6 +106,16 @@ describe('TEFAS current API adapter', () => {
     expect(allocation[0]).toMatchObject({ FONKODU: 'AK3', HS: 90 });
   });
 
+  test('treats the TEFAS empty-resultset server error as no rows', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({ errorMessage: 'Index 0 out of bounds for length 0' }),
+    });
+
+    await expect(fetchInfo({ start: '15.07.2021', end: '15.07.2021' })).resolves.toEqual([]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   test('adapts the current overview response to the enrichment contract', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
