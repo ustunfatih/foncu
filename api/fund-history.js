@@ -1,4 +1,5 @@
 const supabase = require('./_lib/supabase');
+const { fetchPagedRows } = require('./_lib/history');
 const { ensureSupabase } = require('./_lib/supabase-guard');
 const { ValidationError, parsePositiveInt } = require('./_lib/validation');
 const { enforceRateLimit } = require('./_lib/rate-limit');
@@ -46,14 +47,18 @@ module.exports = async function handler(req, res) {
     const startDate = start.toISOString().slice(0, 10);
     const endDate = end.toISOString().slice(0, 10);
 
-    const [historyResult, profileResult, legacyFundResult] = await Promise.all([
-      supabase
-        .from('historical_data')
-        .select('date, price, market_cap, investor_count')
-        .eq('fund_code', code)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date', { ascending: true }),
+    const [rows, profileResult, legacyFundResult] = await Promise.all([
+      // A five-year window exceeds Supabase's 1000-row page cap, which would
+      // silently drop the most recent rows.
+      fetchPagedRows(() => (
+        supabase
+          .from('historical_data')
+          .select('date, price, market_cap, investor_count')
+          .eq('fund_code', code)
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .order('date', { ascending: true })
+      )),
       supabase
         .from('fund_profiles')
         .select('unvan, varlik_dagilimi, guncelleme_zamani')
@@ -61,9 +66,6 @@ module.exports = async function handler(req, res) {
         .maybeSingle(),
       supabase.from('funds').select('title, updated_at').eq('code', code).maybeSingle(),
     ]);
-
-    if (historyResult.error) throw historyResult.error;
-    const rows = historyResult.data || [];
     if (!rows.length) {
       return res.status(404).json({
         error: 'Bu fon için henüz tarihsel veri bulunmuyor',
