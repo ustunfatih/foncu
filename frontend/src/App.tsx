@@ -413,8 +413,8 @@ const App = () => {
       <a className="skip-link" href="#main-content">İçeriğe geç</a>
       <header className="page-header">
         <div>
-          <p className="brand-kicker">Foncu</p>
-          <p className="title">Fonlarınızı veriye bakarak değerlendirin.</p>
+          <p className="brand-kicker">TEFAS · Akıllı fon analizi</p>
+          <p className="title">Piyasayı uzaktan değil, verinin içinden görün.</p>
           <p className="subtitle">TEFAS fonlarını karşılaştırın, portföyünüzün riskini ve gerçek hisse maruziyetini görün.</p>
         </div>
         <div className="header-actions">
@@ -448,6 +448,7 @@ const App = () => {
       </header>
 
       <nav className="app-nav" aria-label="Ana gezinme">
+        <button type="button" className="nav-brand" onClick={() => navigateToTab('home')}>Foncu</button>
         <div className="tabs tabs-primary">
         <button
           className={`tab ${activeTab === 'home' ? 'active' : ''}`}
